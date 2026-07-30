@@ -1,5 +1,6 @@
 // ⚠️ เอา ID ที่คัดลอกมาจากขั้นตอนที่ 1 มาวางแทนที่ข้อความภาษาไทยในเครื่องหมายคำพูดนะครับ
-var TEMPLATE_SHEET_ID = "ใส่_ID_จากไฟล์_POS_Template_ตรงนี้";
+var TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU
+";
 var ADMIN_SHEET_ID    = "ใส่_ID_จากไฟล์_POS_Admin_Sheet_ตรงนี้";
 
 function doGet(e) {

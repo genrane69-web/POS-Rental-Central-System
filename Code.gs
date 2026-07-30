@@ -247,12 +247,12 @@ function installSystem() {
 /**
  * 5. ฟังก์ชันดึงข้อมูลใบเสร็จหลัก (เรียกใช้จาก Receipt.html)
  */
-function getReceiptDetail(txId) {
+function getReceiptDetail(customerSheetId, txId) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Transactions');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Transactions');
     if (!sheet) return { success: false, message: "ไม่พบชีตชื่อ Transactions" };
     
-    const storeConfig = getStoreConfig() || {};
+    const storeConfig = getStoreConfig(customerSheetId) || {};
     const data = sheet.getDataRange().getValues();
     const targetTxId = String(txId).trim().toLowerCase();
     

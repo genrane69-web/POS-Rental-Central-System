@@ -81,55 +81,106 @@
     </p>
   </div>
 
-  <!-- Card 2: หน้าต่าง Loading กำลังติดตั้ง -->
+  <!-- Card 2: หน้าต่าง Loading และ นับถอยหลัง -->
   <div id="loadingCard" class="hidden max-w-md w-full bg-[#111827] border border-slate-800/80 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
     
-    <div class="flex justify-center mb-6">
+    <!-- Spinner หมุนระหว่างติดตั้ง -->
+    <div id="spinnerContainer" class="flex justify-center mb-6">
       <div class="custom-spinner"></div>
     </div>
+
+    <!-- ไอคอนสำเร็จ (ซ่อนไว้ก่อน) -->
+    <div id="successIcon" class="hidden w-16 h-16 bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg">
+      ✅
+    </div>
     
-    <h2 class="text-xl font-bold text-white mb-2">
+    <h2 id="cardTitle" class="text-xl font-bold text-white mb-2">
       กำลังติดตั้งระบบ <span class="text-emerald-400">VEGA POS</span>
     </h2>
-    <p class="text-slate-300 text-xs mb-6 font-light" id="loadingStatus">
+    <p id="loadingStatus" class="text-slate-300 text-xs mb-6 font-light">
       กำลังสร้างคลังข้อมูลส่วนตัวของคุณ กรุณารอสักครู่ (ประมาณ 5-10 วินาที)
     </p>
+
+    <!-- กล่องแสดงตัวเหลกนับถอยหลัง และข้อความแจ้งรีเซ็ตหน้าจอ -->
+    <div id="countdownBox" class="hidden bg-[#1D283A] border border-slate-700/60 rounded-2xl p-5 mb-6 text-center">
+      <p id="countdownLabel" class="text-xs text-slate-400 mb-1">กำลังเตรียมความพร้อมใน...</p>
+      
+      <!-- แสดงตัวเลขถอยหลัง -->
+      <div id="timerNum" class="text-4xl font-extrabold text-emerald-400 my-1 animate-pulse">5</div>
+      
+      <!-- ข้อความแจ้งเตือน Reset หน้าจอ (จะขึ้นแทนที่หลังนับเสร็จ) -->
+      <div id="resetText" class="hidden">
+        <p class="text-lg font-bold text-amber-400 my-2">🔄 กรุณา Reset หน้าจอ</p>
+        <p class="text-xs text-slate-300">ระบบกำลังนำท่านเข้าสู่หน้าจอเข้าใช้งาน...</p>
+      </div>
+    </div>
     
     <!-- Progress Bar -->
-    <div class="w-full bg-[#1D283A] rounded-full h-2 overflow-hidden border border-slate-700/50">
+    <div id="progressBar" class="w-full bg-[#1D283A] rounded-full h-2 overflow-hidden border border-slate-700/50">
       <div class="bg-emerald-500 h-2 rounded-full animate-pulse w-full"></div>
     </div>
     
-    <p class="text-[11px] text-slate-500 mt-6 font-light">
+    <p id="warningMsg" class="text-[11px] text-slate-500 mt-6 font-light">
       ⚠️ กรุณาอย่าเพิ่งปิดหรือรีเฟรชหน้าต่างนี้จนกว่าจะเสร็จสิ้น
     </p>
   </div>
 
   <script>
+    function reloadPage() {
+      window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
+    }
+
     function startInstall() {
-      // สลับหน้าเป็น Loading
+      // สลับไปหน้า Loading
       document.getElementById('mainCard').classList.add('hidden');
       document.getElementById('loadingCard').classList.remove('hidden');
 
-      // เรียกฟังก์ชันฝั่งเซิร์ฟเวอร์
+      // เรียกสั่งงานฝั่งเซิร์ฟเวอร์
       google.script.run
         .withSuccessHandler(function(res) {
           if (res && res.success) {
-            document.getElementById('loadingStatus').innerText = "ติดตั้งสำเร็จ! กำลังนำท่านเข้าสู่หน้าขาย...";
+            // 1. เปลี่ยนหน้าตาเป็น "ติดตั้งสำเร็จ"
+            document.getElementById('spinnerContainer').classList.add('hidden');
+            document.getElementById('successIcon').classList.remove('hidden');
+            document.getElementById('cardTitle').innerHTML = 'ติดตั้งระบบ <span class="text-emerald-400">สำเร็จแล้ว!</span>';
+            document.getElementById('loadingStatus').innerText = 'สร้างคลังข้อมูลส่วนตัวเรียบร้อยแล้ว';
+            document.getElementById('progressBar').classList.add('hidden');
+            document.getElementById('warningMsg').classList.add('hidden');
             
-            // 💡 แก้ไขจุดนี้: สั่งเปิดหน้าเว็บใหม่แบบทะลุกรอบ (เพื่อป้องกันปัญหาหน้าจอขาว)
-            setTimeout(function() {
-              window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
-            }, 2000);
+            // 2. แสดงกล่องนับถอยหลัง
+            document.getElementById('countdownBox').classList.remove('hidden');
+            
+            // 3. เริ่มนับถอยหลัง 5..4..3..2..1
+            let timeLeft = 5;
+            let timerElem = document.getElementById('timerNum');
+            
+            let countdownInterval = setInterval(function() {
+              timeLeft--;
+              if (timeLeft > 0) {
+                timerElem.innerText = timeLeft;
+              } else {
+                clearInterval(countdownInterval);
+                
+                // 💡 พอนับเสร็จ: ซ่อนตัวเลข แล้วขึ้นข้อความ "กรุณา Reset หน้าจอ"
+                timerElem.classList.add('hidden');
+                document.getElementById('countdownLabel').classList.add('hidden');
+                document.getElementById('resetText').classList.remove('hidden');
+
+                // รีเฟรชเด้งเข้าหน้าหลักให้อัตโนมัติหลังจากขึ้นข้อความ 1 วินาที
+                setTimeout(function() {
+                  reloadPage();
+                }, 1000);
+              }
+            }, 1000);
 
           } else {
             alert('เกิดข้อผิดพลาด: ' + (res ? res.message : 'ไม่สามารถติดตั้งได้'));
-            window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
+            reloadPage();
           }
         })
         .withFailureHandler(function(err) {
           alert('เกิดข้อผิดพลาดจากระบบ: ' + err.message);
-          window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
+          reloadPage();
         })
         .installSystem();
     }

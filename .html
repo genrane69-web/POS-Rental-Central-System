@@ -2216,7 +2216,7 @@ function closePaymentSettingsModal() {
 }
 
 // ดึงข้อมูลการชำระเงินเดิมมาแสดงในช่องกรอก
-function loadPaymentSettings() {
+function loadPaymentSettings(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     google.script.run.withSuccessHandler(function(res) {
       if (res && res.success && res.data) {
@@ -2225,7 +2225,7 @@ function loadPaymentSettings() {
         document.getElementById('settingAccountNumber').value = res.data.account_number || '';
         document.getElementById('settingAccountName').value = res.data.account_name || '';
       }
-    }).getPaymentSettings();
+    }).getPaymentSettings(customerSheetId); // ✅ 2. เติม customerSheetId เข้าไปตรงนี้
   }
 }
 

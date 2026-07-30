@@ -244,19 +244,15 @@ function installSystem() {
   }
 }
 
-// ==========================================================
-// 5. ฟังก์ชันดึงข้อมูลใบเสร็จ
-// ==========================================================
-function getReceiptDetail(customerSheetId, txId) {
+/**
+ * 5. ฟังก์ชันดึงข้อมูลใบเสร็จหลัก (เรียกใช้จาก Receipt.html)
+ */
+function getReceiptDetail(txId) {
   try {
-    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Transactions');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Transactions');
     if (!sheet) return { success: false, message: "ไม่พบชีตชื่อ Transactions" };
     
-    let storeConfig = {};
-    if (typeof getStoreConfig === 'function') {
-      storeConfig = getStoreConfig(customerSheetId) || {};
-    }
-
+    const storeConfig = getStoreConfig() || {};
     const data = sheet.getDataRange().getValues();
     const targetTxId = String(txId).trim().toLowerCase();
     
@@ -264,6 +260,7 @@ function getReceiptDetail(customerSheetId, txId) {
       if (String(data[i][0]).trim().toLowerCase() === targetTxId) {
         
         let parsedItems = [];
+        // อ่าน JSON รายการสินค้าจาก คอลัมน์ H (Index 7)
         if (data[i][7]) {
           try {
             parsedItems = typeof data[i][7] === 'string' ? JSON.parse(data[i][7]) : data[i][7];

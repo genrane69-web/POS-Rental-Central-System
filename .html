@@ -2136,7 +2136,7 @@ function closeStaffModal() {
 }
 
 // ดึงรายชื่อพนักงานมาแสดงในตาราง
-function loadStaffList() {
+function loadStaffList(customerSheetId) { // ✅ จุดที่ 1: เติม customerSheetId ที่หัวฟังก์ชัน
   var tbody = document.getElementById('staffTableBody');
   if (!tbody) return;
 
@@ -2157,12 +2157,13 @@ function loadStaffList() {
           <td>${item.username}</td>
           <td>${roleBadge}</td>
           <td style="text-align: center;">
-            <button onclick="deleteStaff('${item.username}')" class="btn-del">ลบ</button>
+            <!-- ✅ จุดที่ 2: เติม '${customerSheetId}' เข้าไปในปุ่มลบลำดับแรก เพื่อให้ลบพนักงานได้ถูกต้อง -->
+            <button onclick="deleteStaff('${customerSheetId}', '${item.username}')" class="btn-del">ลบ</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
-    }).getStaffList();
+    }).getStaffList(customerSheetId); // ✅ จุดที่ 3: เติม customerSheetId เข้าไปตรงนี้
   }
 }
 

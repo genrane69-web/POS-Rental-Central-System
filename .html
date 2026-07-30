@@ -1612,7 +1612,7 @@ filteredSalesHistory() {
       }
       this.showProductModal = true;
     },
-    saveProduct() {
+    SaveProduct(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
   if (!this.formProduct.barcode || !this.formProduct.name) return;
   this.isSavingProduct = true;
   const payload = { ...this.formProduct, isEditing: this.isEditing };  // ← เพิ่ม flag ตรงนี้
@@ -1631,23 +1631,24 @@ filteredSalesHistory() {
       this.isSavingProduct = false;
       alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
     })
-    .saveProduct(payload);
+    .saveProduct(customerSheetId, payload); // ✅ 2. เติม customerSheetId หน้า payload
 },
-    quickAdjustStock(barcode, changeAmount) {
-      google.script.run
-        .withSuccessHandler(res => {
-          if (res.success) {
-            const p = this.products.find(item => item.barcode === barcode);
-            if (p) p.stock = res.newStock;
-          } else {
-            alert("เกิดข้อผิดพลาด: " + res.message);
-          }
-        })
-        .withFailureHandler(err => {
-          alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
-        })
-        .adjustStock(barcode, changeAmount);
-    },
+
+quickAdjustStock(customerSheetId, barcode, changeAmount) { // ✅ 1. เติม customerSheetId ไว้ตัวแรกสุด
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.success) {
+        const p = this.products.find(item => item.barcode === barcode);
+        if (p) p.stock = res.newStock;
+      } else {
+        alert("เกิดข้อผิดพลาด: " + res.message);
+      }
+    })
+    .withFailureHandler(err => {
+      alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
+    })
+    .adjustStock(customerSheetId, barcode, changeAmount); // ✅ 2. เติม customerSheetId ไว้หน้าสุด
+},
     openAdjustModal(p) {
       this.adjustTargetProduct = p;
       this.adjustInputAmount = 10;

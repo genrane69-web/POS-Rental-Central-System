@@ -35,7 +35,7 @@
     <div class="absolute -top-10 -left-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-    <!-- Header Logo (ถอดสไตล์มาจากหน้า POS ของคุณ) -->
+    <!-- Header Logo -->
     <div class="flex items-center justify-center gap-2 mb-6">
       <span class="text-2xl">🛒</span>
       <span class="text-2xl font-bold text-emerald-400 tracking-wide">VEGA POS</span>
@@ -115,18 +115,21 @@
       google.script.run
         .withSuccessHandler(function(res) {
           if (res && res.success) {
-            document.getElementById('loadingStatus').innerText = "ติดตั้งสำเร็จ! กำลังพาท่านเข้าสู่หน้าขาย...";
+            document.getElementById('loadingStatus').innerText = "ติดตั้งสำเร็จ! กำลังนำท่านเข้าสู่หน้าขาย...";
+            
+            // 💡 แก้ไขจุดนี้: สั่งเปิดหน้าเว็บใหม่แบบทะลุกรอบ (เพื่อป้องกันปัญหาหน้าจอขาว)
             setTimeout(function() {
-              window.location.reload(); // โหลดหน้าใหม่เพื่อเข้าสู่ระบบขายทันที
-            }, 1000);
+              window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
+            }, 2000);
+
           } else {
             alert('เกิดข้อผิดพลาด: ' + (res ? res.message : 'ไม่สามารถติดตั้งได้'));
-            location.reload();
+            window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
           }
         })
         .withFailureHandler(function(err) {
           alert('เกิดข้อผิดพลาดจากระบบ: ' + err.message);
-          location.reload();
+          window.top.location.href = "<?= ScriptApp.getService().getUrl() ?>";
         })
         .installSystem();
     }

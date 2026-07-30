@@ -2188,12 +2188,12 @@ function addStaff() {
 }
 
 // ลบพนักงาน
-function deleteStaff(username) {
+function deleteStaff(customerSheetId, username) { // ✅ 1. เติม customerSheetId ไว้ตัวแรกสุด
   if (confirm('ต้องการลบพนักงาน ' + username + ' ใช่หรือไม่?')) {
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run.withSuccessHandler(function() {
         loadStaffList();
-      }).removeStaff(username);
+      }).removeStaff(customerSheetId, username); // ✅ 2. เติม customerSheetId ไว้หน้า username
     }
   }
 }

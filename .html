@@ -1664,98 +1664,101 @@ quickAdjustStock(customerSheetId, barcode, changeAmount) { // ✅ 1. เติ�
       this.quickAdjustStock(this.adjustTargetProduct.barcode, amt);
       this.showAdjustModal = false;
     },
-    checkShiftStatus() {
-      google.script.run
-        .withSuccessHandler(res => {
-          if (res.success) {
-            if (res.activeShift) {
-              this.activeShift = res.activeShift;
-            } else {
-              this.startCashInput = 0;
-              this.showOpenShiftModal = true;
-            }
-          }
-        })
-        .withFailureHandler(err => {
-          alert("ตรวจสอบสถานะกะไม่สำเร็จ: " + err.message);
-        })
-        .getActiveShift(this.currentUser.name);
-    },
-    confirmOpenShift() {
-      const staffName = this.currentUser ? this.currentUser.name : 'พนักงาน';
-      this.isShiftProcessing = true;
-      google.script.run
-        .withSuccessHandler(res => {
-          this.isShiftProcessing = false;
-          if (res && res.success) {
-            this.activeShift = res.shift || res.activeShift;
-            this.showOpenShiftModal = false;
-            alert("🟢 เปิดกะสำเร็จเรียบร้อยครับ!");
-          } else {
-            alert("เปิดกะไม่สำเร็จ: " + (res ? res.message : 'เกิดข้อผิดพลาด'));
-          }
-        })
-        .withFailureHandler(err => {
-          this.isShiftProcessing = false;
-          alert("เกิดข้อผิดพลาดขณะเปิดกะ: " + err.message);
-        })
-        .openShift(staffName, this.startCashInput);
-    },
-    openCloseShiftModal() {
-      if (!this.activeShift) return;
-      this.isShiftProcessing = true;
-      google.script.run
-        .withSuccessHandler(res => {
-          this.isShiftProcessing = false;
-          if (res.success) {
-            this.shiftSummary = res.summary;
-            const cashSales = Number(res.summary.cashSales) || 0;
-            const transferSales = Number(res.summary.transferSales) || 0;
-            this.shiftSummary.totalSales = cashSales + transferSales;
-            const start = Number(this.activeShift.startCash) || 0;
-            const cashIn = Number(res.summary.cashIn) || 0;
-            const cashOut = Number(res.summary.cashOut) || 0;
-            this.actualCashInput = start + cashSales + cashIn - cashOut;
-            this.showCloseShiftModal = true;
-          } else {
-            alert("ดึงข้อมูลกะไม่สำเร็จ: " + res.message);
-          }
-        })
-        .withFailureHandler(err => {
-          this.isShiftProcessing = false;
-          alert("เกิดข้อผิดพลาดในการดึงข้อมูลกะ: " + err.message);
-        })
-        .getShiftSummary(this.currentUser.name, this.activeShift.openTime, this.activeShift.shiftId);
-    },
-    confirmCloseShift() {
-      this.isShiftProcessing = true;
-      const payload = {
-        shiftId: this.activeShift.shiftId,
-        cashSales: this.shiftSummary.cashSales,
-        transferSales: this.shiftSummary.transferSales,
-        cashIn: this.shiftSummary.cashIn || 0,
-        cashOut: this.shiftSummary.cashOut || 0,
-        actualCash: this.actualCashInput
-      };
-      google.script.run
-        .withSuccessHandler(res => {
-          this.isShiftProcessing = false;
-          if (res.success) {
-            this.openCashDrawer();
-            alert("ปิดกะเรียบร้อยแล้ว!");
-            this.showCloseShiftModal = false;
-            this.activeShift = null;
-            this.logout();
-          } else {
-            alert("เกิดข้อผิดพลาด: " + res.message);
-          }
-        })
-        .withFailureHandler(err => {
-          this.isShiftProcessing = false;
-          alert("เกิดข้อผิดพลาดในการปิดกะ: " + err.message);
-        })
-        .closeShift(payload);
-    },
+    CheckShiftStatus(customerSheetId) { // ✅ 1. เติม customerSheetId
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.success) {
+        if (res.activeShift) {
+          this.activeShift = res.activeShift;
+        } else {
+          this.startCashInput = 0;
+          this.showOpenShiftModal = true;
+        }
+      }
+    })
+    .withFailureHandler(err => {
+      alert("ตรวจสอบสถานะกะไม่สำเร็จ: " + err.message);
+    })
+    .getActiveShift(customerSheetId, this.currentUser.name); // ✅ 2. เติม customerSheetId ไว้หน้าสุด
+},
+
+confirmOpenShift(customerSheetId) { // ✅ 1. เติม customerSheetId
+  const staffName = this.currentUser ? this.currentUser.name : 'พนักงาน';
+  this.isShiftProcessing = true;
+  google.script.run
+    .withSuccessHandler(res => {
+      this.isShiftProcessing = false;
+      if (res && res.success) {
+        this.activeShift = res.shift || res.activeShift;
+        this.showOpenShiftModal = false;
+        alert("🟢 เปิดกะสำเร็จเรียบร้อยครับ!");
+      } else {
+        alert("เปิดกะไม่สำเร็จ: " + (res ? res.message : 'เกิดข้อผิดพลาด'));
+      }
+    })
+    .withFailureHandler(err => {
+      this.isShiftProcessing = false;
+      alert("เกิดข้อผิดพลาดขณะเปิดกะ: " + err.message);
+    })
+    .openShift(customerSheetId, staffName, this.startCashInput); // ✅ 2. เติม customerSheetId ไว้หน้าสุด
+},
+
+openCloseShiftModal(customerSheetId) { // ✅ 1. เติม customerSheetId
+  if (!this.activeShift) return;
+  this.isShiftProcessing = true;
+  google.script.run
+    .withSuccessHandler(res => {
+      this.isShiftProcessing = false;
+      if (res.success) {
+        this.shiftSummary = res.summary;
+        const cashSales = Number(res.summary.cashSales) || 0;
+        const transferSales = Number(res.summary.transferSales) || 0;
+        this.shiftSummary.totalSales = cashSales + transferSales;
+        const start = Number(this.activeShift.startCash) || 0;
+        const cashIn = Number(res.summary.cashIn) || 0;
+        const cashOut = Number(res.summary.cashOut) || 0;
+        this.actualCashInput = start + cashSales + cashIn - cashOut;
+        this.showCloseShiftModal = true;
+      } else {
+        alert("ดึงข้อมูลกะไม่สำเร็จ: " + res.message);
+      }
+    })
+    .withFailureHandler(err => {
+      this.isShiftProcessing = false;
+      alert("เกิดข้อผิดพลาดในการดึงข้อมูลกะ: " + err.message);
+    })
+    .getShiftSummary(customerSheetId, this.currentUser.name, this.activeShift.openTime, this.activeShift.shiftId); // ✅ 2. เติม customerSheetId ไว้หน้าสุด
+},
+
+confirmCloseShift(customerSheetId) { // ✅ 1. เติม customerSheetId
+  this.isShiftProcessing = true;
+  const payload = {
+    shiftId: this.activeShift.shiftId,
+    cashSales: this.shiftSummary.cashSales,
+    transferSales: this.shiftSummary.transferSales,
+    cashIn: this.shiftSummary.cashIn || 0,
+    cashOut: this.shiftSummary.cashOut || 0,
+    actualCash: this.actualCashInput
+  };
+  google.script.run
+    .withSuccessHandler(res => {
+      this.isShiftProcessing = false;
+      if (res.success) {
+        this.openCashDrawer();
+        alert("ปิดกะเรียบร้อยแล้ว!");
+        this.showCloseShiftModal = false;
+        this.activeShift = null;
+        this.logout();
+      } else {
+        alert("เกิดข้อผิดพลาด: " + res.message);
+      }
+    })
+    .withFailureHandler(err => {
+      this.isShiftProcessing = false;
+      alert("เกิดข้อผิดพลาดในการปิดกะ: " + err.message);
+    })
+    .closeShift(customerSheetId, payload); // ✅ 2. เติม customerSheetId ไว้หน้า payload
+},
     openCashMovementModal() {
       this.cashForm = { type: 'Paid Out', amount: '', reason: this.paidOutReasons[0], detail: '' };
       this.showCashMovementModal = true;

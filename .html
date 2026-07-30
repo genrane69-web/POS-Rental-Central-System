@@ -2230,7 +2230,7 @@ function loadPaymentSettings() {
 }
 
 // บันทึกข้อมูลการชำระเงิน
-function savePaymentSettingsFromUI() {
+function savePaymentSettingsFromUI(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
   var payload = {
     promptpay_id: document.getElementById('settingPromptPay').value.trim(),
     bank_name: document.getElementById('settingBankName').value.trim(),
@@ -2246,7 +2246,7 @@ function savePaymentSettingsFromUI() {
       } else {
         alert("เกิดข้อผิดพลาด: " + (res.message || "ไม่สามารถบันทึกได้"));
       }
-    }).savePaymentSettings(payload);
+    }).savePaymentSettings(customerSheetId, payload); // ✅ 2. เติม customerSheetId ไว้หน้าสุดตรงนี้
   }
 }
 

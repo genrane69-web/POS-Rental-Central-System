@@ -1476,3 +1476,75 @@ function savePaymentSettings(customerSheetId, newSettings) {
     return { success: false, message: error.toString() };
   }
 }
+
+// ==========================================================
+// ฟังก์ชันค้นหาข้อมูลสลิปฉบับเต็ม (ดึงทั้งสรุป + รายการสินค้า)
+// ==========================================================
+function searchSlipData(qrContent) {
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    const customerInfo = getCustomerSheetIdByEmail(userEmail);
+
+    if (!customerInfo.isInstalled || !customerInfo.sheetId) {
+      return { found: false, message: "ไม่พบข้อมูลการติดตั้งระบบของคุณ" };
+    }
+
+    const ss = SpreadsheetApp.openById(customerInfo.sheetId);
+    
+    // 1️⃣ ค้นหาข้อมูลสรุปสลิปจากแท็บ "Transactions"
+    const transSheet = ss.getSheetByName("Transactions");
+    if (!transSheet) {
+      return { found: false, message: "ไม่พบแท็บ Transactions ใน Google Sheet" };
+    }
+
+    const transData = transSheet.getDataRange().getValues();
+    let summary = null;
+
+    // วนลูปหา Transaction ID ในคอลัมน์ A (index 0)
+    for (let i = 1; i < transData.length; i++) {
+      if (String(transData[i][0]).trim() === String(qrContent).trim()) {
+        summary = {
+          txId: transData[i][0],          // คอลัมน์ A: Transaction ID
+          timestamp: transData[i][1],     // คอลัมน์ B: Timestamp
+          staff: transData[i][2],         // คอลัมน์ C: Staff
+          totalAmount: transData[i][3],   // คอลัมน์ D: Total Amount
+          discount: transData[i][4],      // คอลัมน์ E: Discount
+          paymentMethod: transData[i][5], // คอลัมน์ F: Payment Method
+          status: transData[i][6]         // คอลัมน์ G: Status
+        };
+        break;
+      }
+    }
+
+    if (!summary) {
+      return { found: false, message: "ไม่พบข้อมูลสลิปรหัส: " + qrContent };
+    }
+
+    // 2️⃣ ค้นหารายการสินค้าของสลิปนี้จากแท็บ "CashLogs"
+    let items = [];
+    const logsSheet = ss.getSheetByName("CashLogs");
+    if (logsSheet) {
+      const logsData = logsSheet.getDataRange().getValues();
+      for (let j = 1; j < logsData.length; j++) {
+        // คอลัมน์ B (index 1) คือ TxID
+        if (String(logsData[j][1]).trim() === String(qrContent).trim()) {
+          items.push({
+            productName: logsData[j][4], // คอลัมน์ E: ProductName
+            qty: logsData[j][5],         // คอลัมน์ F: Qty
+            price: logsData[j][6],       // คอลัมน์ G: Price
+            total: logsData[j][7]        // คอลัมน์ H: Total
+          });
+        }
+      }
+    }
+
+    return {
+      found: true,
+      summary: summary,
+      items: items
+    };
+
+  } catch (err) {
+    return { found: false, message: "เกิดข้อผิดพลาด: " + err.toString() };
+  }
+}

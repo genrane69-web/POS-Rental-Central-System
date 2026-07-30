@@ -1574,19 +1574,19 @@ filteredSalesHistory() {
       this.inputPin = '';
       this.cart = [];
     },
-    fetchProducts() {
-      this.loading = true;
-      google.script.run
-        .withSuccessHandler(data => {
-          this.products = data || [];
-          this.loading = false;
-        })
-        .withFailureHandler(err => {
-          this.loading = false;
-          alert("ดึงข้อมูลสินค้าไม่สำเร็จ: " + err.message);
-        })
-        .getProducts();
-    },
+    FetchProducts(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
+  this.loading = true;
+  google.script.run
+    .withSuccessHandler(data => {
+      this.products = data || [];
+      this.loading = false;
+    })
+    .withFailureHandler(err => {
+      this.loading = false;
+      alert("ดึงข้อมูลสินค้าไม่สำเร็จ: " + err.message);
+    })
+    .getProducts(customerSheetId); // ✅ 2. เติม customerSheetId ไว้ในนี้
+},
     addToCart(p) {
       const exist = this.cart.find(item => item.barcode === p.barcode);
       if (exist) {

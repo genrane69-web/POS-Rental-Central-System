@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>หน้าร้าน POS</title></head>
+<body style="padding:20px; font-family:sans-serif; background-color:#f4f6f9;">
+  <h2>🏪 หน้าร้าน POS ของคุณ</h2>
+  <p><b>ผู้ใช้งาน:</b> <?= userEmail ?></p>
+  <hr>
+  <button onclick="loadProducts()" style="padding:10px 20px; background:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">🔄 ดึงข้อมูลรายการสินค้า</button>
+  <ul id="list" style="margin-top:20px; font-size:18px;"></ul>
+  <script>
+    function loadProducts() {
+      document.getElementById('list').innerHTML = "กำลังโหลดข้อมูล...";
+      google.script.run.withSuccessHandler(function(data){
+        var html = "";
+        if(data.length === 0) { html = "<li>ยังไม่มีรายการสินค้าใน Sheet ของคุณ</li>"; } 
+        else { data.forEach(function(p){ html += "<li style='margin-bottom:8px;'>" + (p[1] || "ไม่มีชื่อ") + " - ราคา " + (p[2] || 0) + " บาท</li>"; }); }
+        document.getElementById('list').innerHTML = html;
+      }).getProducts("<?= sheetId ?>");
+    }
+  </script>
+</body>
+</html>

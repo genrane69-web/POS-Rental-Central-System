@@ -1184,10 +1184,16 @@
 </div>
 
 <script>
+// ✅ ค่านี้ได้รับมาจาก server (doGet ใน Code.gs ที่ tpl.customerSheetId = customerInfo.sheetId)
+// เก็บไว้เป็นตัวแปร global เพื่อให้ทั้ง Vue methods และฟังก์ชันธรรมดานอก Vue เรียกใช้ได้ตรงกัน
+const CUSTOMER_SHEET_ID = "<?= customerSheetId ?>";
+const WEB_APP_URL = "<?= webAppUrl ?>";
+
 const { createApp } = Vue;
 createApp({
   data() {
     return {
+      customerSheetId: CUSTOMER_SHEET_ID, // ✅ เก็บไว้ใน Vue data ด้วย เผื่อ methods ต้องใช้ this.customerSheetId
       inputPin: '',
       adminTab: 'stock',
       currentUser: null,
@@ -1250,10 +1256,11 @@ createApp({
       cashMovements: [],
       currentBillItems: [],
       showBillDetailModal: false,
-historySubTab: 'sales',
-historyDatePreset: 'today',
-historyStartDate: '',
-historyEndDate: ''
+      selectedBill: null,
+      historySubTab: 'sales',
+      historyDatePreset: 'today',
+      historyStartDate: '',
+      historyEndDate: ''
     };
   },
   watch: {
@@ -1330,9 +1337,9 @@ historyEndDate: ''
     filteredCashMovements() {
       return this.cashMovements || [];
     },
-filteredSalesHistory() {
-  return this.salesHistory || [];
-}
+    filteredSalesHistory() {
+      return this.salesHistory || [];
+    }
   },
   methods: {
     async connectDrawer() {
@@ -1371,28 +1378,30 @@ filteredSalesHistory() {
       }
     },
     generateReceiptQR(txId) {
-      this.$nextTick(() => {
-        const qrContainer = document.getElementById('qrcode');
-        if (qrContainer) {
-          qrContainer.innerHTML = '';
-          const webAppUrl = "https://script.google.com/macros/s/AKfycbxf5aHJFKg0rECdZPK9DcToViW8rxpIvBOsRSPrqzkIB5dur4xZAChYdeL_uK_SzBMe7A/exec";
-          const receiptUrl = `${webAppUrl}?page=receipt&receiptId=${txId}&txId=${txId}`;
-          new QRCode(qrContainer, {
-            text: receiptUrl,
-            width: 180,
-            height: 180,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-          });
-        }
+  this.$nextTick(() => {
+    const qrContainer = document.getElementById('qrcode');
+    if (qrContainer) {
+      qrContainer.innerHTML = '';
+      const webAppUrl = WEB_APP_URL; // ← เปลี่ยนจากลิงก์ hardcode เป็นตัวแปร dynamic
+      const receiptUrl = `${webAppUrl}?page=receipt&receiptId=${txId}&txId=${txId}&sheetId=${this.customerSheetId}`;
+      new QRCode(qrContainer, {
+        text: receiptUrl,
+        width: 180,
+        height: 180,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
       });
-    },
+    }
+  });
+},
     closeReceiptModal() {
       this.showReceiptModal = false;
       this.receivedCash = 0;
     },
+    // ✅ แก้ชื่อจาก SaveStoreConfig -> saveStoreConfig (ตรงกับที่ template เรียก @click="saveStoreConfig()")
     saveStoreConfig() {
+      const customerSheetId = this.customerSheetId;
       localStorage.setItem('vega_store_config', JSON.stringify(this.storeConfig));
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
@@ -1403,7 +1412,7 @@ filteredSalesHistory() {
               alert('เกิดข้อผิดพลาดในการบันทึกลง Google Sheets');
             }
           })
-          .saveStoreConfig(this.storeConfig);
+          .saveStoreConfig(customerSheetId, this.storeConfig);
       } else {
         alert('บันทึกข้อมูลเรียบร้อย (โหมดทดสอบ)');
       }
@@ -1449,7 +1458,9 @@ filteredSalesHistory() {
       };
       reader.readAsDataURL(file);
     },
+    // ✅ แก้ชื่อจาก LoadStoreConfig -> loadStoreConfig (ตรงกับที่ mounted() เรียก this.loadStoreConfig())
     loadStoreConfig() {
+      const customerSheetId = this.customerSheetId;
       this.showStoreSettingsModal = false;
       const savedConfig = localStorage.getItem('vega_store_config');
       if (savedConfig) {
@@ -1467,10 +1478,10 @@ filteredSalesHistory() {
               localStorage.setItem('vega_store_config', JSON.stringify(config));
             }
           })
-          .getStoreConfig();
+          .getStoreConfig(customerSheetId);
       }
     },
-        setPaymentMethod(method) {
+    setPaymentMethod(method) {
       this.paymentMethod = method;
       
       // [ของเดิม] ถ้าไม่ใช่เงินสด ให้ตั้งค่ายอดเงินที่รับมา = ยอดสุทธิ
@@ -1492,7 +1503,9 @@ filteredSalesHistory() {
     setReceivedAmount(amt) {
       this.receivedAmount = amt;
     },
+    // ✅ แก้ชื่อจาก ConfirmCheckout -> confirmCheckout (ตรงกับที่ template เรียก @click="confirmCheckout")
     confirmCheckout() {
+      const customerSheetId = this.customerSheetId;
       if (this.paymentMethod === 'เงินสด' && this.receivedAmount < this.totalAmount) {
         alert("จำนวนเงินที่รับมาน้อยกว่ายอดสุทธิครับ");
         return;
@@ -1537,7 +1550,7 @@ filteredSalesHistory() {
           this.isProcessing = false;
           alert("เกิดข้อผิดพลาดจากระบบ: " + err.message);
         })
-        .processSale(saleData);
+        .processSale(customerSheetId, saleData);
     },
     startNewSale() {
       this.cart = [];
@@ -1546,7 +1559,9 @@ filteredSalesHistory() {
       this.saleSuccess = false;
       this.completedSaleInfo = null;
     },
+    // ✅ แก้ชื่อจาก Login -> login (ตรงกับที่ template เรียก @click="login" และ @keyup.enter="login")
     login() {
+      const customerSheetId = this.customerSheetId;
       if (!this.inputPin) return;
       this.isLoggingIn = true;
       this.loginError = '';
@@ -1567,14 +1582,16 @@ filteredSalesHistory() {
           this.isLoggingIn = false;
           this.loginError = "เกิดข้อผิดพลาดจากระบบ: " + err.message;
         })
-        .checkLogin(this.inputPin);
+        .checkLogin(customerSheetId, this.inputPin);
     },
     logout() {
       this.currentUser = null;
       this.inputPin = '';
       this.cart = [];
     },
+    // ✅ แก้ชื่อจาก FetchProducts -> fetchProducts (ตรงกับที่เรียกใน login() และที่อื่นๆ)
     fetchProducts() {
+      const customerSheetId = this.customerSheetId;
       this.loading = true;
       google.script.run
         .withSuccessHandler(data => {
@@ -1585,7 +1602,7 @@ filteredSalesHistory() {
           this.loading = false;
           alert("ดึงข้อมูลสินค้าไม่สำเร็จ: " + err.message);
         })
-        .getProducts();
+        .getProducts(customerSheetId);
     },
     addToCart(p) {
       const exist = this.cart.find(item => item.barcode === p.barcode);
@@ -1612,28 +1629,33 @@ filteredSalesHistory() {
       }
       this.showProductModal = true;
     },
+    // ✅ แก้ชื่อจาก SaveProduct -> saveProduct (ตรงกับที่ template เรียก @click="saveProduct")
     saveProduct() {
-  if (!this.formProduct.barcode || !this.formProduct.name) return;
-  this.isSavingProduct = true;
-  const payload = { ...this.formProduct, isEditing: this.isEditing };  // ← เพิ่ม flag ตรงนี้
-  google.script.run
-    .withSuccessHandler(res => {
-      this.isSavingProduct = false;
-      if (res.success) {
-        this.showProductModal = false;
-        this.fetchProducts();
-        alert("บันทึกข้อมูลสินค้าเรียบร้อยแล้ว!");
-      } else {
-        alert("เกิดข้อผิดพลาด: " + res.message);
-      }
-    })
-    .withFailureHandler(err => {
-      this.isSavingProduct = false;
-      alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
-    })
-    .saveProduct(payload);
-},
+      const customerSheetId = this.customerSheetId;
+      if (!this.formProduct.barcode || !this.formProduct.name) return;
+      this.isSavingProduct = true;
+      const payload = { ...this.formProduct, isEditing: this.isEditing };
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isSavingProduct = false;
+          if (res.success) {
+            this.showProductModal = false;
+            this.fetchProducts();
+            alert("บันทึกข้อมูลสินค้าเรียบร้อยแล้ว!");
+          } else {
+            alert("เกิดข้อผิดพลาด: " + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          this.isSavingProduct = false;
+          alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
+        })
+        .saveProduct(customerSheetId, payload);
+    },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (ใช้ this.customerSheetId แทน)
+    // เดิมรับ (customerSheetId, barcode, changeAmount) แต่ template ส่งมาแค่ 2 ค่า ทำให้ค่าเลื่อนตำแหน่งผิดหมด
     quickAdjustStock(barcode, changeAmount) {
+      const customerSheetId = this.customerSheetId;
       google.script.run
         .withSuccessHandler(res => {
           if (res.success) {
@@ -1646,7 +1668,7 @@ filteredSalesHistory() {
         .withFailureHandler(err => {
           alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
         })
-        .adjustStock(barcode, changeAmount);
+        .adjustStock(customerSheetId, barcode, changeAmount);
     },
     openAdjustModal(p) {
       this.adjustTargetProduct = p;
@@ -1663,7 +1685,9 @@ filteredSalesHistory() {
       this.quickAdjustStock(this.adjustTargetProduct.barcode, amt);
       this.showAdjustModal = false;
     },
+    // ✅ แก้ชื่อจาก CheckShiftStatus -> checkShiftStatus (ตรงกับที่เรียกใน login())
     checkShiftStatus() {
+      const customerSheetId = this.customerSheetId;
       google.script.run
         .withSuccessHandler(res => {
           if (res.success) {
@@ -1678,9 +1702,11 @@ filteredSalesHistory() {
         .withFailureHandler(err => {
           alert("ตรวจสอบสถานะกะไม่สำเร็จ: " + err.message);
         })
-        .getActiveShift(this.currentUser.name);
+        .getActiveShift(customerSheetId, this.currentUser.name);
     },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (template เรียก @click="confirmOpenShift" ไม่ส่ง arg ใดๆ)
     confirmOpenShift() {
+      const customerSheetId = this.customerSheetId;
       const staffName = this.currentUser ? this.currentUser.name : 'พนักงาน';
       this.isShiftProcessing = true;
       google.script.run
@@ -1698,9 +1724,11 @@ filteredSalesHistory() {
           this.isShiftProcessing = false;
           alert("เกิดข้อผิดพลาดขณะเปิดกะ: " + err.message);
         })
-        .openShift(staffName, this.startCashInput);
+        .openShift(customerSheetId, staffName, this.startCashInput);
     },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (template เรียก @click="openCloseShiftModal" ไม่ส่ง arg ใดๆ)
     openCloseShiftModal() {
+      const customerSheetId = this.customerSheetId;
       if (!this.activeShift) return;
       this.isShiftProcessing = true;
       google.script.run
@@ -1724,9 +1752,11 @@ filteredSalesHistory() {
           this.isShiftProcessing = false;
           alert("เกิดข้อผิดพลาดในการดึงข้อมูลกะ: " + err.message);
         })
-        .getShiftSummary(this.currentUser.name, this.activeShift.openTime, this.activeShift.shiftId);
+        .getShiftSummary(customerSheetId, this.currentUser.name, this.activeShift.openTime, this.activeShift.shiftId);
     },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (template เรียก @click="confirmCloseShift" ไม่ส่ง arg ใดๆ)
     confirmCloseShift() {
+      const customerSheetId = this.customerSheetId;
       this.isShiftProcessing = true;
       const payload = {
         shiftId: this.activeShift.shiftId,
@@ -1753,7 +1783,7 @@ filteredSalesHistory() {
           this.isShiftProcessing = false;
           alert("เกิดข้อผิดพลาดในการปิดกะ: " + err.message);
         })
-        .closeShift(payload);
+        .closeShift(customerSheetId, payload);
     },
     openCashMovementModal() {
       this.cashForm = { type: 'Paid Out', amount: '', reason: this.paidOutReasons[0], detail: '' };
@@ -1795,7 +1825,9 @@ filteredSalesHistory() {
       this.historyDatePreset = 'custom';
       this.loadHistoryData();
     },
+    // ✅ แก้ชื่อจาก SubmitCashMovement -> submitCashMovement (ตรงกับที่ template เรียก @click="submitCashMovement")
     submitCashMovement() {
+      const customerSheetId = this.customerSheetId;
       const amountNum = Number(this.cashForm.amount);
       if (!amountNum || amountNum <= 0) {
         alert('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง (ต้องมากกว่า 0)');
@@ -1825,10 +1857,11 @@ filteredSalesHistory() {
           this.cashMovementLoading = false;
           alert('❌ เกิดข้อผิดพลาดจาก Server: ' + err.message);
         })
-        .saveCashMovement(payload);
+        .saveCashMovement(customerSheetId, payload);
     },
-
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (เรียกจาก applyHistoryDatePreset/onHistoryDateInputChange โดยไม่ส่ง arg)
     loadHistoryData() {
+      const customerSheetId = this.customerSheetId;
       const startDate = this.historyStartDate || '';
       const endDate = this.historyEndDate || '';
 
@@ -1836,17 +1869,19 @@ filteredSalesHistory() {
         if (res && res.success) {
           this.salesHistory = res.data || [];
         }
-      }).getSalesHistory(startDate, endDate);
+      }).getSalesHistory(customerSheetId, startDate, endDate);
 
       google.script.run.withSuccessHandler((res) => {
         if (res && res.success) {
           this.shiftHistory = res.shifts || [];
           this.cashMovements = res.movements || [];
         }
-      }).getShiftHistory(startDate, endDate);
+      }).getShiftHistory(customerSheetId, startDate, endDate);
     },
-
-           viewBillDetails(tx) {
+    // ✅ แก้ชื่อจาก ViewBillDetails -> viewBillDetails และแก้ signature ให้รับแค่ tx ตัวเดียว
+    // (ตรงกับที่ template เรียก @click="viewBillDetails(sale.txId)")
+    viewBillDetails(tx) {
+      const customerSheetId = this.customerSheetId;
       // 1. แยกแยะว่าส่งมาเป็น Object บิล หรือส่งมาเป็น รหัสบิล (ID)
       if (typeof tx === 'object' && tx !== null) {
         this.selectedBill = tx;
@@ -1883,32 +1918,32 @@ filteredSalesHistory() {
           
           this.showBillDetailModal = true;
         }
-      }).getTransactionItems(targetId);
+      }).getTransactionItems(customerSheetId, targetId);
     },
-
-openStaffModal() {
-  const modal = document.getElementById('staffModal');
-  if (modal) {
-    modal.style.display = 'flex';
-    loadStaffList();
-  }
-},
-openStoreConfigModal() {
-  this.showStoreSettingsModal = true;
-},
-
+    openStaffModal() {
+      const modal = document.getElementById('staffModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        loadStaffList();
+      }
+    },
+    openStoreConfigModal() {
+      this.showStoreSettingsModal = true;
+    },
+    // ✅ แก้ชื่อจาก HandleCancelBill -> handleCancelBill และแก้ signature ให้รับแค่ txId ตัวเดียว
+    // (ตรงกับที่ template เรียก @click="handleCancelBill(sale.txId)")
     handleCancelBill(txId) {
+      const customerSheetId = this.customerSheetId;
       if (confirm("คุณแน่ใจหรือไม่ที่จะยกเลิกบิล " + txId + " ?\nระบบจะทำการคืนสินค้าทั้งหมดในบิลเข้าสต็อกให้อัตโนมัติ")) {
         google.script.run.withSuccessHandler((res) => {
           alert(res.message);
           if (res && res.success) {
             this.loadHistoryData(); 
-            // เปลี่ยนชื่อให้ตรงกับระบบหลักของคุณจาก loadProducts เป็น fetchProducts
             if (typeof this.fetchProducts === 'function') {
               this.fetchProducts(); 
             }
           }
-        }).cancelTransaction(txId);
+        }).cancelTransaction(customerSheetId, txId);
       }
     }
 
@@ -1945,8 +1980,11 @@ openStoreConfigModal() {
 
 /**
  * 📊 ส่วนควบคุมหน้า DASHBOARD
+ * (ฟังก์ชันเหล่านี้อยู่นอก Vue instance เลยใช้ this.customerSheetId ไม่ได้
+ *  ต้องใช้ CUSTOMER_SHEET_ID ตัวแปร global แทน)
  */
 function loadDashboardData() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   const startDate = document.getElementById('dashStartDate')?.value || '';
   const endDate = document.getElementById('dashEndDate')?.value || '';
   const salesElement = document.getElementById('statTotalSales');
@@ -2010,7 +2048,7 @@ function loadDashboardData() {
       const el = document.getElementById('statTotalSales');
       if (el) el.innerText = 'Error';
     })
-    .getDashboardData(startDate, endDate); 
+    .getDashboardData(customerSheetId, startDate, endDate);
 }
 
 function updateElementText(id, text) {
@@ -2086,6 +2124,7 @@ function renderLowStockList(lowItems) {
 }
 
 function checkOutOfStock() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   google.script.run
     .withSuccessHandler(function(response) {
       if (!response.success) {
@@ -2111,7 +2150,7 @@ function checkOutOfStock() {
         countEl.innerText = `รายการสินค้าทั้งหมด (แสดงเฉพาะสินค้าหมด/ติดลบ ${outOfStockItems.length} รายการ)`;
       }
     })
-    .getOutOfStockProducts();
+    .getOutOfStockProducts(customerSheetId);
 }
 
 // เปิดหน้าต่างป๊อปอัพ
@@ -2133,6 +2172,7 @@ function closeStaffModal() {
 
 // ดึงรายชื่อพนักงานมาแสดงในตาราง
 function loadStaffList() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   var tbody = document.getElementById('staffTableBody');
   if (!tbody) return;
 
@@ -2153,17 +2193,18 @@ function loadStaffList() {
           <td>${item.username}</td>
           <td>${roleBadge}</td>
           <td style="text-align: center;">
-            <button onclick="deleteStaff('${item.username}')" class="btn-del">ลบ</button>
+            <button onclick="deleteStaff('${customerSheetId}', '${item.username}')" class="btn-del">ลบ</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
-    }).getStaffList();
+    }).getStaffList(customerSheetId);
   }
 }
 
 // บันทึกพนักงานใหม่
 function addStaff() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   var name = document.getElementById('staffNameInput').value;
   var pin = document.getElementById('staffPinInput').value;
   var role = document.getElementById('staffRoleInput').value;
@@ -2179,17 +2220,17 @@ function addStaff() {
       document.getElementById('staffNameInput').value = '';
       document.getElementById('staffPinInput').value = '';
       loadStaffList();
-    }).saveNewStaff(name, pin, role);
+    }).saveNewStaff(customerSheetId, name, pin, role);
   }
 }
 
-// ลบพนักงาน
-function deleteStaff(username) {
+// ลบพนักงาน (customerSheetId ถูกส่งมาจาก loadStaffList อยู่แล้วในปุ่ม onclick ด้านบน)
+function deleteStaff(customerSheetId, username) {
   if (confirm('ต้องการลบพนักงาน ' + username + ' ใช่หรือไม่?')) {
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run.withSuccessHandler(function() {
         loadStaffList();
-      }).removeStaff(username);
+      }).removeStaff(customerSheetId, username);
     }
   }
 }
@@ -2213,6 +2254,7 @@ function closePaymentSettingsModal() {
 
 // ดึงข้อมูลการชำระเงินเดิมมาแสดงในช่องกรอก
 function loadPaymentSettings() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     google.script.run.withSuccessHandler(function(res) {
       if (res && res.success && res.data) {
@@ -2221,12 +2263,13 @@ function loadPaymentSettings() {
         document.getElementById('settingAccountNumber').value = res.data.account_number || '';
         document.getElementById('settingAccountName').value = res.data.account_name || '';
       }
-    }).getPaymentSettings();
+    }).getPaymentSettings(customerSheetId);
   }
 }
 
 // บันทึกข้อมูลการชำระเงิน
 function savePaymentSettingsFromUI() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   var payload = {
     promptpay_id: document.getElementById('settingPromptPay').value.trim(),
     bank_name: document.getElementById('settingBankName').value.trim(),
@@ -2242,12 +2285,13 @@ function savePaymentSettingsFromUI() {
       } else {
         alert("เกิดข้อผิดพลาด: " + (res.message || "ไม่สามารถบันทึกได้"));
       }
-    }).savePaymentSettings(payload);
+    }).savePaymentSettings(customerSheetId, payload);
   }
 }
 
 // ฟังก์ชันดึงเลขบัญชีธนาคารมาโชว์ในกล่องชำระเงิน
 function updateBankDetailsDisplay() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     google.script.run.withSuccessHandler(function(res) {
       if (res && res.success && res.data) {
@@ -2259,7 +2303,7 @@ function updateBankDetailsDisplay() {
         if (accNumElem) accNumElem.innerText = res.data.account_number || '-';
         if (accNameElem) accNameElem.innerText = res.data.account_name || '-';
       }
-    }).getPaymentSettings();
+    }).getPaymentSettings(customerSheetId);
   }
 }
 

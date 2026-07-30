@@ -1392,23 +1392,23 @@ filteredSalesHistory() {
       this.showReceiptModal = false;
       this.receivedCash = 0;
     },
-    saveStoreConfig() {
-      localStorage.setItem('vega_store_config', JSON.stringify(this.storeConfig));
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler(res => {
-            if (res && res.success) {
-              alert('บันทึกข้อมูลร้านค้าลงระบบเรียบร้อยแล้ว!');
-            } else {
-              alert('เกิดข้อผิดพลาดในการบันทึกลง Google Sheets');
-            }
-          })
-          .saveStoreConfig(this.storeConfig);
-      } else {
-        alert('บันทึกข้อมูลเรียบร้อย (โหมดทดสอบ)');
-      }
-      this.showStoreSettingsModal = false;
-    },
+    SaveStoreConfig(customerSheetId) {
+  localStorage.setItem('vega_store_config', JSON.stringify(this.storeConfig));
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(res => {
+        if (res && res.success) {
+          alert('บันทึกข้อมูลร้านค้าลงระบบเรียบร้อยแล้ว!');
+        } else {
+          alert('เกิดข้อผิดพลาดในการบันทึกลง Google Sheets');
+        }
+      })
+      .saveStoreConfig(customerSheetId, this.storeConfig); // ✅ เติม customerSheetId ไว้หน้าสุดแล้ว
+  } else {
+    alert('บันทึกข้อมูลเรียบร้อย (โหมดทดสอบ)');
+  }
+  this.showStoreSettingsModal = false;
+},
     handleLogoUpload(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;

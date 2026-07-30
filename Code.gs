@@ -1,9 +1,9 @@
 /**
  * 1. ตรวจสอบ PIN ล็อกอินเข้าใช้งาน
  */
-function checkLogin(pin) {
+function checkLogin(customerSheetId, pin) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('staffs');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('staffs');
     if (!sheet) return { success: false, message: "ไม่พบแผ่นงาน 'staffs'" };
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
@@ -24,9 +24,9 @@ function checkLogin(pin) {
 /**
  * 2. ดึงข้อมูลสินค้าทั้งหมด
  */
-function getProducts() {
+function getProducts(customerSheetId) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Products');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Products');
     if (!sheet) return [];
     const data = sheet.getDataRange().getValues();
     if (data.length <= 1) return [];
@@ -52,9 +52,9 @@ function getProducts() {
 /**
  * 3. บันทึกการขาย + ตัดสต็อกสินค้า + บันทึกรายการสินค้าลง Transactions
  */
-function processSale(saleData) {
+function processSale(customerSheetId, saleData) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const productSheet = ss.getSheetByName('Products');
     const txSheet = ss.getSheetByName('Transactions');
     const cashLogSheet = ss.getSheetByName('CashLogs');
@@ -105,7 +105,7 @@ function processSale(saleData) {
 /**
  * 4. ฟังก์ชันเปิดหน้าเว็บ (doGet)
  */
-function doGet(e) {
+function doGet(customerSheetId, e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
   const txId = (e && e.parameter) ? (e.parameter.txId || e.parameter.receiptId || '') : '';
 
@@ -128,12 +128,12 @@ function doGet(e) {
 /**
  * 5. ฟังก์ชันดึงข้อมูลใบเสร็จหลัก (เรียกใช้จาก Receipt.html)
  */
-function getReceiptDetail(txId) {
+function getReceiptDetail(customerSheetId, txId) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Transactions');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Transactions');
     if (!sheet) return { success: false, message: "ไม่พบชีตชื่อ Transactions" };
     
-    const storeConfig = getStoreConfig() || {};
+    const storeConfig = getStoreConfig(customerSheetId) || {};
     const data = sheet.getDataRange().getValues();
     const targetTxId = String(txId).trim().toLowerCase();
     
@@ -178,9 +178,9 @@ function getReceiptDetail(txId) {
   }
 }
 
-function saveProduct(product) {
+function saveProduct(customerSheetId, product) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Products');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Products');
     if (!sheet) {
       return { success: false, message: "ไม่พบแผ่นงาน 'Products' ใน Google Sheet" };
     }
@@ -238,9 +238,9 @@ function saveProduct(product) {
 /**
  * 7. ปรับสต็อกด่วน
  */
-function adjustStock(barcode, changeAmount) {
+function adjustStock(customerSheetId, barcode, changeAmount) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Products');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Products');
     if (!sheet) return { success: false, message: "ไม่พบแผ่นงาน 'Products'" };
     const data = sheet.getDataRange().getValues();
 
@@ -263,9 +263,9 @@ function adjustStock(barcode, changeAmount) {
 /**
  * 8. ระบบจัดการกะการทำงาน (Shifts)
  */
-function getActiveShift(staffName) {
+function getActiveShift(customerSheetId, staffName) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Shifts');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Shifts');
     if (!sheet) return { success: true, activeShift: null };
     const data = sheet.getDataRange().getValues();
 
@@ -289,9 +289,9 @@ function getActiveShift(staffName) {
   }
 }
 
-function openShift(staffName, startCash) {
+function openShift(customerSheetId, staffName, startCash) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     let sheet = ss.getSheetByName('Shifts');
     
     if (!sheet) {
@@ -330,13 +330,13 @@ function openShift(staffName, startCash) {
   }
 }
 
-function getShiftSummary(staffName, openTime, shiftId) {
+function getShiftSummary(customerSheetId, staffName, openTime, shiftId) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const txSheet = ss.getSheetByName('Transactions');
     const moveSheet = ss.getSheetByName('CashMovements');
 
-    let shiftStart = parseCustomDate(openTime);
+    let shiftStart = parseCustomDate(customerSheetId, openTime);
     const shiftStartTime = shiftStart.getTime();
 
     let cashSales = 0;
@@ -350,7 +350,7 @@ function getShiftSummary(staffName, openTime, shiftId) {
 
       for (let i = 1; i < data.length; i++) {
         const txStaff = String(data[i][2] || '').trim().toLowerCase();
-        let txTime = parseCustomDate(data[i][1]);
+        let txTime = parseCustomDate(customerSheetId, data[i][1]);
 
         const txAmount = Number(data[i][3]) || 0;
         const paymentMethod = String(data[i][5] || '').trim();
@@ -401,9 +401,9 @@ function getShiftSummary(staffName, openTime, shiftId) {
   }
 }
 
-function closeShift(data) {
+function closeShift(customerSheetId, data) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Shifts');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Shifts');
     if (!sheet) return { success: false, message: "ไม่พบแผ่นงาน 'Shifts'" };
 
     const sheetData = sheet.getDataRange().getValues();
@@ -449,9 +449,9 @@ function closeShift(data) {
 /**
  * 9. บันทึกเงินเข้า/ถอนเงิน
  */
-function saveCashMovement(data) {
+function saveCashMovement(customerSheetId, data) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     let sheet = ss.getSheetByName('CashMovements');
     if (!sheet) {
       sheet = ss.insertSheet('CashMovements');
@@ -477,9 +477,9 @@ function saveCashMovement(data) {
 /**
  * 10. ระบบตั้งค่าร้านค้า (Settings)
  */
-function saveStoreConfig(config) {
+function saveStoreConfig(customerSheetId, config) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     let sheet = ss.getSheetByName('Settings');
     
     if (!sheet) {
@@ -494,9 +494,9 @@ function saveStoreConfig(config) {
   }
 }
 
-function getStoreConfig() {
+function getStoreConfig(customerSheetId) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Settings');
     if (!sheet) return null;
     const data = sheet.getRange("A2:B2").getValues();
     if (data[0][0] === 'storeConfig' && data[0][1]) {
@@ -511,7 +511,7 @@ function getStoreConfig() {
 /**
  * ฟังก์ชันช่วยแปลงวันที่ (พ.ศ./ค.ศ.)
  */
-function parseCustomDate(dateVal) {
+function parseCustomDate(customerSheetId, dateVal) {
   if (dateVal instanceof Date) return dateVal;
   if (!dateVal) return new Date(0);
   
@@ -542,9 +542,9 @@ function parseCustomDate(dateVal) {
 // ==========================================
 
 // 1. ดึงข้อมูลสถิติภาพรวม, ยอดขาย, ต้นทุน, กำไร
-function getAdminDashboardData(startDateStr, endDateStr) {
+function getAdminDashboardData(customerSheetId, startDateStr, endDateStr) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const transSheet = ss.getSheetByName('Transactions');
     const prodSheet = ss.getSheetByName('Products');
     
@@ -643,9 +643,9 @@ function getAdminDashboardData(startDateStr, endDateStr) {
 }
 
 // 2. ดึงประวัติใบเสร็จรับเงิน
-function getReceiptHistory(startDateStr, endDateStr) {
+function getReceiptHistory(customerSheetId, startDateStr, endDateStr) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const sheet = ss.getSheetByName('Transactions');
     if (!sheet) return { success: true, receipts: [] };
     
@@ -659,7 +659,7 @@ function getReceiptHistory(startDateStr, endDateStr) {
     let receipts = [];
     for (let i = data.length - 1; i >= 1; i--) {
       const row = data[i];
-      const rowDate = parseCustomDate(row[1]); 
+      const rowDate = parseCustomDate(customerSheetId, row[1]); 
       
       if (rowDate >= start && rowDate <= end) {
         receipts.push({
@@ -683,9 +683,9 @@ function getReceiptHistory(startDateStr, endDateStr) {
 }
 
 // 3. ฟังก์ชันยกเลิกใบเสร็จ (Void)
-function voidReceipt(transId, rowIndex) {
+function voidReceipt(customerSheetId, transId, rowIndex) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const sheet = ss.getSheetByName('Transactions');
     if (!sheet) return { success: false, message: 'ไม่พบชีต Transactions' };
     sheet.getRange(rowIndex, 7).setValue('VOIDED');
@@ -698,9 +698,9 @@ function voidReceipt(transId, rowIndex) {
 /**
  * ฟังก์ชันดึงข้อมูล Dashboard (แก้ไขให้ดึงข้อมูลจาก 3 ชีตอย่างถูกต้อง)
  */
-function getDashboardData(startDateStr, endDateStr) {
+function getDashboardData(customerSheetId, startDateStr, endDateStr) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     
     // --------------------------------------------------------
     // สเต็ปที่ 1: ไปที่หน้า "Products" เพื่อจำ "ต้นทุน" ของสินค้าแต่ละตัว
@@ -827,9 +827,9 @@ function getDashboardData(startDateStr, endDateStr) {
 /**
  * ฟังก์ชันเสริม: เผื่อฝั่งหน้าจอ (หน้าบ้าน) มีการเรียกขอข้อมูลสต๊อกแยกต่างหาก
  */
-function getLowStockProducts() {
+function getLowStockProducts(customerSheetId) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     var productSheet = ss.getSheetByName("Products");
     var lowStockItems = [];
     
@@ -853,7 +853,7 @@ function getLowStockProducts() {
 }
 
 // ฟังก์ชันช่วยแปลงวันที่ (วางไว้ล่างสุดของไฟล์ Code.gs)
-function parseCustomDate(dateVal) {
+function parseCustomDate(customerSheetId, dateVal) {
   if (!dateVal) return new Date(0);
   if (dateVal instanceof Date) return dateVal;
   
@@ -877,9 +877,9 @@ function parseCustomDate(dateVal) {
 /**
  * ดึงรายชื่อสินค้าที่สต็อกหมดหรือติดลบ (<= 0) จากชีต "Products"
  */
-function getOutOfStockProducts() {
+function getOutOfStockProducts(customerSheetId) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     var sheet = ss.getSheetByName("Products"); // ชี้ตรงไปที่ชีต Products
     
     if (!sheet) {
@@ -925,9 +925,9 @@ function getOutOfStockProducts() {
 /**
  * 8. ดึงประวัติการขายทั้งหมด (จากหน้า Transactions)
  */
-function getSalesHistory(startDateStr, endDateStr) {
+function getSalesHistory(customerSheetId, startDateStr, endDateStr) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Transactions');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Transactions');
     if (!sheet) return { success: false, message: "ไม่พบแผ่นงาน Transactions" };
     
     const data = sheet.getDataRange().getDisplayValues(); 
@@ -942,7 +942,7 @@ function getSalesHistory(startDateStr, endDateStr) {
     for (let i = 1; i < data.length; i++) {
       if (!data[i][0]) continue;
       
-      const rowDate = parseCustomDate(data[i][1]);
+      const rowDate = parseCustomDate(customerSheetId, data[i][1]);
       
       if (rowDate >= start && rowDate <= end) {
         sales.push({
@@ -965,9 +965,9 @@ function getSalesHistory(startDateStr, endDateStr) {
 /**
  * 9. ดึงรายละเอียดสินค้าภายในบิล (จากหน้า CashLogs)
  */
-function getTransactionItems(txId) {
+function getTransactionItems(customerSheetId, txId) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CashLogs');
+    const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('CashLogs');
     if (!sheet) return { success: false, message: "ไม่พบแผ่นงาน CashLogs" };
     
     const data = sheet.getDataRange().getDisplayValues();
@@ -994,9 +994,9 @@ function getTransactionItems(txId) {
 /**
  * 10. ยกเลิกบิล + บวกสินค้าคืนเข้าสต็อกอัตโนมัติ
  */
-function cancelTransaction(txId) {
+function cancelTransaction(customerSheetId, txId) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const txSheet = ss.getSheetByName('Transactions');
     const logsSheet = ss.getSheetByName('CashLogs');
     const prodSheet = ss.getSheetByName('Products');
@@ -1055,9 +1055,9 @@ function cancelTransaction(txId) {
 /**
  * 11. ดึงข้อมูลประวัติการปิดกะ และ รายการเงินเข้า/ออก
  */
-function getShiftHistory(startDateStr, endDateStr) {
+function getShiftHistory(customerSheetId, startDateStr, endDateStr) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(customerSheetId);
     const shiftSheet = ss.getSheetByName('Shifts');
     const moveSheet = ss.getSheetByName('CashMovements');
     
@@ -1074,7 +1074,7 @@ function getShiftHistory(startDateStr, endDateStr) {
         if (!sData[i][0]) continue;
         
         // เช็กคอลัมน์ OpenTime (Index 2)
-        const openTimeDate = parseCustomDate(sData[i][2]);
+        const openTimeDate = parseCustomDate(customerSheetId, sData[i][2]);
         
         if (openTimeDate >= start && openTimeDate <= end) {
           shifts.push({
@@ -1104,7 +1104,7 @@ function getShiftHistory(startDateStr, endDateStr) {
         if (!mData[i][0]) continue;
         
         // เช็กคอลัมน์ Timestamp (Index 0)
-        const moveTimeDate = parseCustomDate(mData[i][0]);
+        const moveTimeDate = parseCustomDate(customerSheetId, mData[i][0]);
 
         if (moveTimeDate >= start && moveTimeDate <= end) {
           movements.push({
@@ -1131,8 +1131,8 @@ function getShiftHistory(startDateStr, endDateStr) {
 // ==========================================
 
 // ดึงรายชื่อพนักงานทั้งหมด
-function getStaffList() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("staffs");
+function getStaffList(customerSheetId) {
+  var sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName("staffs");
   if (!sheet) return [];
   
   var data = sheet.getDataRange().getValues();
@@ -1152,10 +1152,10 @@ function getStaffList() {
 }
 
 // บันทึกพนักงานใหม่ลง Sheet
-function saveNewStaff(username, pin, role) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("staffs");
+function saveNewStaff(customerSheetId, username, pin, role) {
+  var sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName("staffs");
   if (!sheet) {
-    sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet("staffs");
+    sheet = SpreadsheetApp.openById(customerSheetId).insertSheet("staffs");
     sheet.appendRow(["Username", "PIN", "Role"]);
   }
   sheet.appendRow([username, pin, role]);
@@ -1163,8 +1163,8 @@ function saveNewStaff(username, pin, role) {
 }
 
 // ลบพนักงานออกจาก Sheet
-function removeStaff(username) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("staffs");
+function removeStaff(customerSheetId, username) {
+  var sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName("staffs");
   if (!sheet) return "Error";
   
   var data = sheet.getDataRange().getValues();
@@ -1184,9 +1184,9 @@ function removeStaff(username) {
 /**
  * ดึงข้อมูลการตั้งค่าการชำระเงินจากหน้า Settings (แถวที่ Key = paymentSettings)
  */
-function getPaymentSettings() {
+function getPaymentSettings(customerSheetId) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     var sheet = ss.getSheetByName("Settings");
     if (!sheet) {
       return { success: false, message: "ไม่พบแผ่นงาน Settings" };
@@ -1211,9 +1211,9 @@ function getPaymentSettings() {
 /**
  * บันทึกหรืออัปเดตข้อมูลการตั้งค่าการชำระเงินลงหน้า Settings
  */
-function savePaymentSettings(newSettings) {
+function savePaymentSettings(customerSheetId, newSettings) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     var sheet = ss.getSheetByName("Settings");
     if (!sheet) {
       return { success: false, message: "ไม่พบแผ่นงาน Settings" };
@@ -1250,9 +1250,9 @@ function savePaymentSettings(newSettings) {
 /**
  * ดึงข้อมูลการตั้งค่าการชำระเงินจากหน้า Settings (แถวที่ Key = paymentSettings)
  */
-function getPaymentSettings() {
+function getPaymentSettings(customerSheetId) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     var sheet = ss.getSheetByName("Settings");
     if (!sheet) {
       return { success: false, message: "ไม่พบแผ่นงาน Settings" };
@@ -1277,9 +1277,9 @@ function getPaymentSettings() {
 /**
  * บันทึกหรืออัปเดตข้อมูลการตั้งค่าการชำระเงินลงหน้า Settings
  */
-function savePaymentSettings(newSettings) {
+function savePaymentSettings(customerSheetId, newSettings) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById(customerSheetId);
     var sheet = ss.getSheetByName("Settings");
     if (!sheet) {
       return { success: false, message: "ไม่พบแผ่นงาน Settings" };
@@ -1308,5 +1308,3 @@ function savePaymentSettings(newSettings) {
     return { success: false, message: error.toString() };
   }
 }
-
-

@@ -101,7 +101,6 @@ function processSale(customerSheetId, saleData) {
     return { success: false, message: error.toString() };
   }
 }
-
 // ==========================================================
 // 1. ตั้งค่า ID สำหรับระบบ SaaS
 // ==========================================================

@@ -1546,29 +1546,29 @@ filteredSalesHistory() {
       this.saleSuccess = false;
       this.completedSaleInfo = null;
     },
-    login() {
-      if (!this.inputPin) return;
-      this.isLoggingIn = true;
-      this.loginError = '';
-      google.script.run
-        .withSuccessHandler(res => {
-          this.isLoggingIn = false;
-          if (res.success) {
-            this.currentUser = res.user;
-            this.inputPin = '';
-            this.currentView = 'pos';
-            this.fetchProducts();
-            this.checkShiftStatus();
-          } else {
-            this.loginError = res.message;
-          }
-        })
-        .withFailureHandler(err => {
-          this.isLoggingIn = false;
-          this.loginError = "เกิดข้อผิดพลาดจากระบบ: " + err.message;
-        })
-        .checkLogin(this.inputPin);
-    },
+    Login(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
+  if (!this.inputPin) return;
+  this.isLoggingIn = true;
+  this.loginError = '';
+  google.script.run
+    .withSuccessHandler(res => {
+      this.isLoggingIn = false;
+      if (res.success) {
+        this.currentUser = res.user;
+        this.inputPin = '';
+        this.currentView = 'pos';
+        this.fetchProducts();
+        this.checkShiftStatus();
+      } else {
+        this.loginError = res.message;
+      }
+    })
+    .withFailureHandler(err => {
+      this.isLoggingIn = false;
+      this.loginError = "เกิดข้อผิดพลาดจากระบบ: " + err.message;
+    })
+    .checkLogin(customerSheetId, this.inputPin); // ✅ 2. เติม customerSheetId ไว้หน้าสุดตรงนี้
+},
     logout() {
       this.currentUser = null;
       this.inputPin = '';

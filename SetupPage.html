@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>ติดตั้งระบบ</title></head>
+<body style="text-align:center; padding:50px; font-family:sans-serif; background-color:#f8f9fa;">
+  <div style="background:white; padding:30px; border-radius:12px; display:inline-block; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+    <h2>🛒 ยินดีต้อนรับสู่ระบบ POS</h2>
+    <p>ระบบจะสร้างฐานข้อมูลร้านค้าแยกเฉพาะสำหรับบัญชีของคุณ</p>
+    <p style="color:#6c757d;"><b>บัญชีผู้ใช้:</b> <?= userEmail ?></p>
+    <br>
+    <button id="btn" onclick="startSetup()" style="padding:15px 30px; font-size:18px; background:#28a745; color:white; border:none; border-radius:8px; cursor:pointer;">🚀 กดปุ่มนี้เพื่อเริ่มใช้งานทันที</button>
+    <p id="msg" style="margin-top:20px; color:#007bff; font-weight:bold;"></p>
+  </div>
+  <script>
+    function startSetup() {
+      document.getElementById('btn').disabled = true;
+      document.getElementById('btn').style.backgroundColor = '#ccc';
+      document.getElementById('msg').innerText = "กำลังสร้างฐานข้อมูลใน Drive ของคุณ กรุณารอสักครู่...";
+      google.script.run.withSuccessHandler(function(res){
+        if(res.success) { alert("ติดตั้งสำเร็จเรียบร้อย!"); location.reload(); } 
+        else { alert("เกิดข้อผิดพลาด: " + res.message); document.getElementById('btn').disabled = false; }
+      }).setupNewStore();
+    }
+  </script>
+</body>
+</html>

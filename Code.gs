@@ -108,7 +108,7 @@ const ADMIN_SHEET_ID    = "17gIAKqnX3Hde5J7fcBjB8wTTaE7UP-nbLOHrLh-PRK4"; // ID 
 const TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU"; // ID ชีตแม่แบบ POS
 
 // ==========================================================
-// 2. ฟังก์ชัน doGet(e) - ตัวรับลิงก์หลัก (ข้ามหน้าติดตั้งให้อัตโนมัติถ้าเคยติดตั้งแล้ว)
+// 2. ฟังก์ชัน doGet(e) - ตัวรับลิงก์หลัก (ขามหน้าติดตั้งให้อัตโนมัติถ้าเคยติดตั้งแล้ว)
 // ==========================================================
 function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
@@ -126,10 +126,10 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 2️⃣ ดึงอีเมลของผู้ที่เปิดลิงก์เข้ามาใช้งาน
+  // 2️⃣ ดึงอีเมลของผู้ที่เปิดลิงกเข้ามาใช้งาน
   const userEmail = Session.getActiveUser().getEmail();
 
-  // 3️⃣ ค้นหา Sheet ID ของลูกค้าคนนี้จากชีตแอดมิน
+  // 3️⃣ ค้นหา Sheet ID ของลูกคาคนนี้จากชีตแอดมิน
   const customerInfo = getCustomerSheetIdByEmail(userEmail);
 
   // 4️⃣ ถ้ายังไม่มีในชีตแอดมิน -> เปิดหน้าเด้งติดตั้ง (Install.html)
@@ -145,6 +145,7 @@ function doGet(e) {
   // 5️⃣ ถ้าติดตั้งแล้ว -> เปิดหน้า POS (Index.html) พร้อมส่ง customerSheetId ไปใช้งาน
   const tpl = HtmlService.createTemplateFromFile('Index');
   tpl.customerSheetId = customerInfo.sheetId; 
+  tpl.webAppUrl = ScriptApp.getService().getUrl(); // ← บรรทัดใหม่ที่เพิ่มเข้ามา
   
   return tpl.evaluate()
     .setTitle('VEGA POS')

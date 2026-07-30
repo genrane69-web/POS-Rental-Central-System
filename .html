@@ -1799,56 +1799,56 @@ confirmCloseShift(customerSheetId) { // ✅ 1. เติม customerSheetId
       this.historyDatePreset = 'custom';
       this.loadHistoryData();
     },
-    submitCashMovement() {
-      const amountNum = Number(this.cashForm.amount);
-      if (!amountNum || amountNum <= 0) {
-        alert('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง (ต้องมากกว่า 0)');
-        return;
+    SubmitCashMovement(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
+  const amountNum = Number(this.cashForm.amount);
+  if (!amountNum || amountNum <= 0) {
+    alert('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง (ต้องมากกว่า 0)');
+    return;
+  }
+  this.cashMovementLoading = true;
+  const payload = {
+    shiftId: this.activeShift ? this.activeShift.shiftId : '',
+    staff: this.currentUser ? (typeof this.currentUser === 'object' ? this.currentUser.name : this.currentUser) : 'พนักงาน',
+    type: this.cashForm.type,
+    amount: amountNum,
+    reason: this.cashForm.reason,
+    detail: this.cashForm.detail
+  };
+  google.script.run
+    .withSuccessHandler(res => {
+      this.cashMovementLoading = false;
+      if (res.success) {
+        this.openCashDrawer();
+        alert('✅ ' + res.message);
+        this.showCashMovementModal = false;
+      } else {
+        alert('❌ เกิดข้อผิดพลาด: ' + res.message);
       }
-      this.cashMovementLoading = true;
-      const payload = {
-        shiftId: this.activeShift ? this.activeShift.shiftId : '',
-        staff: this.currentUser ? (typeof this.currentUser === 'object' ? this.currentUser.name : this.currentUser) : 'พนักงาน',
-        type: this.cashForm.type,
-        amount: amountNum,
-        reason: this.cashForm.reason,
-        detail: this.cashForm.detail
-      };
-      google.script.run
-        .withSuccessHandler(res => {
-          this.cashMovementLoading = false;
-          if (res.success) {
-            this.openCashDrawer();
-            alert('✅ ' + res.message);
-            this.showCashMovementModal = false;
-          } else {
-            alert('❌ เกิดข้อผิดพลาด: ' + res.message);
-          }
-        })
-        .withFailureHandler(err => {
-          this.cashMovementLoading = false;
-          alert('❌ เกิดข้อผิดพลาดจาก Server: ' + err.message);
-        })
-        .saveCashMovement(payload);
-    },
+    })
+    .withFailureHandler(err => {
+      this.cashMovementLoading = false;
+      alert('❌ เกิดข้อผิดพลาดจาก Server: ' + err.message);
+    })
+    .saveCashMovement(customerSheetId, payload); // ✅ 2. เติม customerSheetId ไว้หน้า payload
+},
 
-    loadHistoryData() {
-      const startDate = this.historyStartDate || '';
-      const endDate = this.historyEndDate || '';
+loadHistoryData(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
+  const startDate = this.historyStartDate || '';
+  const endDate = this.historyEndDate || '';
 
-      google.script.run.withSuccessHandler((res) => {
-        if (res && res.success) {
-          this.salesHistory = res.data || [];
-        }
-      }).getSalesHistory(startDate, endDate);
+  google.script.run.withSuccessHandler((res) => {
+    if (res && res.success) {
+      this.salesHistory = res.data || [];
+    }
+  }).getSalesHistory(customerSheetId, startDate, endDate); // ✅ 2. เติม customerSheetId ไว้ตัวแรกสุด
 
-      google.script.run.withSuccessHandler((res) => {
-        if (res && res.success) {
-          this.shiftHistory = res.shifts || [];
-          this.cashMovements = res.movements || [];
-        }
-      }).getShiftHistory(startDate, endDate);
-    },
+  google.script.run.withSuccessHandler((res) => {
+    if (res && res.success) {
+      this.shiftHistory = res.shifts || [];
+      this.cashMovements = res.movements || [];
+    }
+  }).getShiftHistory(customerSheetId, startDate, endDate); // ✅ 3. เติม customerSheetId ไว้ตัวแรกสุด
+},
 
            viewBillDetails(tx) {
       // 1. แยกแยะว่าส่งมาเป็น Object บิล หรือส่งมาเป็น รหัสบิล (ID)

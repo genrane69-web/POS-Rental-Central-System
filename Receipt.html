@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ตรวจสอบใบเสร็จ - VEGA POS</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- Font Prompt -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { 
+      font-family: 'Prompt', sans-serif; 
+      background-color: #0b0f19;
+    }
+    /* เอฟเฟกต์เรืองแสงนีออน (Glow Effect) */
+    .neon-glow-green {
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.25);
+    }
+    .neon-glow-btn {
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    }
+    .neon-glow-btn:hover {
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.7);
+    }
+    @media print {
+      body { background-color: #ffffff !important; color: #000000 !important; }
+      .no-print { display: none !important; }
+      .print-area { 
+        background-color: #ffffff !important; 
+        color: #000000 !important;
+        border: none !important; 
+        box-shadow: none !important; 
+      }
+      .text-neon-green { color: #000000 !important; }
+      .text-neon-yellow { color: #000000 !important; }
+      .text-slate-300, .text-slate-400, .text-slate-500 { color: #333333 !important; }
+      .border-slate-800 { border-color: #ddd !important; }
+    }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen py-6 px-4">
+
+  <div id="app" class="max-w-md mx-auto">
+    
+    <!-- Header ระบบ (นีออน) -->
+    <div class="text-center mb-6 no-print">
+      <div class="inline-flex items-center justify-center w-12 h-12 bg-emerald-500 text-slate-950 rounded-2xl shadow-[0_0_15px_rgba(16,185,129,0.5)] mb-2 font-bold text-2xl">
+        V
+      </div>
+      <h1 class="text-xl font-bold tracking-wide text-emerald-400">VEGA POS</h1>
+      <p class="text-xs text-slate-400">ระบบตรวจสอบใบเสร็จรับเงินอิเล็กทรอนิกส์</p>
+    </div>
+
+    <!-- ช่องค้นหาใบเสร็จ -->
+    <div class="bg-[#131b2e] rounded-2xl p-4 border border-emerald-500/30 neon-glow-green mb-6 no-print">
+      <label class="block text-xs font-medium text-slate-300 mb-2">ค้นหาด้วยเลขที่ใบเสร็จ</label>
+      <div class="flex gap-2">
+        <input 
+          type="text" 
+          v-model="searchTxId" 
+          placeholder="เช่น TX-1785100641534" 
+          class="flex-1 p-2.5 bg-[#1a243a] border border-slate-700 rounded-xl focus:outline-none focus:border-emerald-400 text-slate-100 text-sm font-mono placeholder-slate-500"
+          @keyup.enter="searchReceipt"
+        >
+        <button 
+          @click="searchReceipt" 
+          :disabled="loading"
+          class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition neon-glow-btn flex items-center gap-1 disabled:opacity-50"
+        >
+          <span v-if="!loading">ค้นหา</span>
+          <span v-else>กำลังค้น...</span>
+        </button>
+      </div>
+      <p v-if="errorMessage" class="text-xs text-rose-400 mt-2 text-center">{{ errorMessage }}</p>
+    </div>
+
+    <!-- โหลดดิ้ง -->
+    <div v-if="loading" class="text-center py-12 no-print">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-400 border-t-transparent"></div>
+      <p class="text-slate-400 text-sm mt-3">กำลังดึงข้อมูลใบเสร็จ...</p>
+    </div>
+
+    <!-- บัตรใบเสร็จ (Vibrant Neon Receipt Card) -->
+    <div v-if="receiptData && !loading" class="print-area bg-[#131b2e] rounded-2xl border border-emerald-500/40 p-6 relative overflow-hidden neon-glow-green">
+      
+      <!-- แถบแสงตกแต่งด้านบน -->
+      <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-500"></div>
+
+      <!-- ส่วนหัวใบเสร็จ -->
+      <div class="text-center pb-4 border-b border-slate-800">
+        <img v-if="receiptData.storeLogo" :src="receiptData.storeLogo" class="w-14 h-14 rounded-2xl object-cover border border-emerald-500/30 p-1 bg-slate-800 mx-auto mb-2 shadow-md">
+        <h2 class="text-xl font-bold text-emerald-400 tracking-wide">{{ receiptData.storeName || 'Case_Phone.' }}</h2>
+        <p class="text-xs text-slate-400 mt-1">{{ receiptData.storeAddress || '-' }}</p>
+        <p class="text-xs text-slate-400">โทร: {{ receiptData.storePhone || '-' }}</p>
+      </div>
+
+      <!-- รายละเอียดธุรกรรม -->
+      <div class="py-3 border-b border-slate-800 text-xs text-slate-300 space-y-1.5">
+        <div class="flex justify-between">
+          <span class="text-slate-400">เลขที่ใบเสร็จ:</span>
+          <span class="font-mono font-bold text-amber-400">{{ receiptData.txId }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">วันที่-เวลา:</span>
+          <span class="text-slate-200">{{ receiptData.date }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">ชำระด้วย:</span>
+          <span class="font-semibold text-cyan-400">{{ receiptData.paymentMethod }}</span>
+        </div>
+      </div>
+
+      <!-- รายการสินค้า -->
+      <div v-if="receiptData.items && receiptData.items.length > 0" class="py-3 border-b border-slate-800">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-slate-400 font-normal border-b border-slate-800">
+              <th class="text-left pb-2">รายการ</th>
+              <th class="text-center pb-2">จำนวน</th>
+              <th class="text-right pb-2">รวม</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 text-slate-200">
+            <tr v-for="(item, idx) in receiptData.items" :key="idx">
+              <td class="py-2.5 pr-2">{{ item.name }}</td>
+              <td class="py-2.5 text-center text-slate-400">{{ item.qty }}</td>
+              <td class="py-2.5 text-right font-mono text-emerald-400 font-medium">{{ ((item.price || 0) * (item.qty || 1)).toLocaleString() }} ฿</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ยอดรวมและการคำนวณ -->
+      <div class="py-3 space-y-2 text-xs border-b border-slate-800">
+        <div class="flex justify-between text-slate-400">
+          <span>รวมเป็นเงิน</span>
+          <span class="font-mono text-slate-200">{{ (receiptData.subtotal || receiptData.total || 0).toLocaleString() }} ฿</span>
+        </div>
+        <div v-if="receiptData.discount > 0" class="flex justify-between text-rose-400">
+          <span>ส่วนลด</span>
+          <span class="font-mono">-{{ Number(receiptData.discount).toLocaleString() }} ฿</span>
+        </div>
+        
+        <!-- ยอดชำระสุทธิ (เน้นสีเขียวนีออนใหญ่ชัดเจน) -->
+        <div class="flex justify-between items-center text-base font-bold pt-2 border-t border-slate-800">
+          <span class="text-slate-100">ยอดชำระสุทธิ</span>
+          <span class="font-mono text-2xl text-emerald-400 font-extrabold tracking-tight drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]">
+            {{ (receiptData.total || 0).toLocaleString() }} ฿
+          </span>
+        </div>
+      </div>
+
+      <!-- ข้อความขอบคุณ -->
+      <div class="text-center pt-4">
+        <p class="text-xs text-slate-300 font-medium">ขอบคุณที่อุดหนุนครับ/ค่ะ 🙏</p>
+        <p class="text-[10px] text-slate-500 mt-1">เอกสารนี้ออกโดยระบบ VEGA POS</p>
+      </div>
+     
+     </div>
+
+    </div>
+
+  </div>
+
+<script>
+  const { createApp } = Vue;
+
+  createApp({
+    data() {
+      return {
+        searchTxId: '<?= txId ?>',
+        receiptData: null,
+        loading: false,
+        errorMessage: ''
+      }
+    },
+    mounted() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tx = urlParams.get('txId') || urlParams.get('receiptId') || urlParams.get('tx') || '<?= txId ?>';
+
+      if (tx && tx !== '<?= txId ?>') { 
+        this.searchTxId = tx;
+        this.fetchData(tx);
+      } else if (this.searchTxId) {
+        this.fetchData(this.searchTxId);
+      }
+    },
+    methods: {
+      searchReceipt() {
+        if (!this.searchTxId.trim()) {
+          this.errorMessage = 'กรุณากรอกเลขที่ใบเสร็จ';
+          return;
+        }
+        this.fetchData(this.searchTxId.trim());
+      },
+      fetchData(txId) {
+        this.loading = true;
+        this.errorMessage = '';
+        this.receiptData = null;
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(res => {
+              this.loading = false;
+              if (res && res.success && res.data) {
+                var store = res.storeConfig || {};
+                
+                this.receiptData = {
+                  ...res.data,
+                  storeName: store.name || store.storeName || 'Case_Phone.',
+                  storeAddress: store.address || store.storeAddress || 'ห้าง ฮาเบอร์มอลล์แหลมฉบัง',
+                  storePhone: store.phone || store.storePhone || '0656282416',
+                  storeLogo: store.logoUrl || store.logo || ''
+                };
+              } else {
+                this.errorMessage = (res && res.message) ? res.message : 'ไม่พบข้อมูลใบเสร็จเลขที่นี้ โปรดตรวจสอบอีกครั้ง';
+              }
+            })
+            .withFailureHandler(err => {
+              this.loading = false;
+              this.errorMessage = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ' + (err.message || err);
+            })
+            .getReceiptDetail(txId);
+        } else {
+          // จำลองข้อมูลทดสอบ
+          setTimeout(() => {
+            this.loading = false;
+            if (txId) {
+              this.receiptData = {
+                txId: txId,
+                date: '27/07/2026 04:48',
+                storeName: 'Case_Phone.',
+                storeAddress: 'ห้าง ฮาเบอร์มอลล์แหลมฉบัง',
+                storePhone: '0656282416',
+                storeLogo: '',
+                paymentMethod: 'โอนเงิน',
+                subtotal: 529,
+                discount: 0,
+                total: 529,
+                items: [
+                  { name: 'i13 เต็มจอ 100บาท', qty: 1, price: 100 },
+                  { name: 'ud01 iphone', qty: 2, price: 100 },
+                  { name: 'เคส129บาท', qty: 1, price: 129 },
+                  { name: 'เคส100บาท', qty: 1, price: 100 }
+                ]
+              };
+            } else {
+              this.errorMessage = 'ไม่พบข้อมูลใบเสร็จ';
+            }
+          }, 800);
+        }
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>

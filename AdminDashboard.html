@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>ระบบจัดการผู้เช่า</title></head>
+<body style="padding:20px; font-family:sans-serif; background-color:#f8f9fa;">
+  <h2>👑 หน้าจัดการผู้เช่า (สำหรับแอดมิน)</h2>
+  <button onclick="loadTenants()" style="padding:10px 20px; background:#17a2b8; color:white; border:none; border-radius:5px; cursor:pointer;">🔄 ดึงรายชื่อผู้เช่าทั้งหมด</button>
+  <ul id="tenants" style="margin-top:20px; line-height:2;"></ul>
+  <script>
+    function loadTenants() {
+      document.getElementById('tenants').innerHTML = "กำลังดึงข้อมูล...";
+      google.script.run.withSuccessHandler(function(data){
+        var html = "";
+        if(data.length === 0) { html = "ยังไม่มีผู้เช่าในระบบ"; } 
+        else {
+          data.forEach(function(t){
+            html += "<li style='background:white; margin-bottom:10px; padding:10px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.05);'>" + 
+                    "<b>Email:</b> " + t.email + " | " + "<b>สถานะ:</b> " + t.status + " | " + "<b>หมดอายุ:</b> " + t.expireDate + " " +
+                    "<button onclick='addDays(\""+t.email+"\")' style='margin-left:10px; cursor:pointer;'>➕ เพิ่ม 30 วัน</button>" +
+                    "</li>";
+          });
+        }
+        document.getElementById('tenants').innerHTML = html;
+      }).getAllTenants();
+    }
+    function addDays(email) {
+      google.script.run.withSuccessHandler(function(){
+        alert("ต่ออายุให้ผู้ใช้ " + email + " เพิ่ม 30 วันเรียบร้อย!");
+        loadTenants();
+      }).updateTenantStatus(email, "Active", 30);
+    }
+  </script>
+</body>
+</html>

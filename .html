@@ -1901,20 +1901,20 @@ openStoreConfigModal() {
   this.showStoreSettingsModal = true;
 },
 
-    handleCancelBill(txId) {
-      if (confirm("คุณแน่ใจหรือไม่ที่จะยกเลิกบิล " + txId + " ?\nระบบจะทำการคืนสินค้าทั้งหมดในบิลเข้าสต็อกให้อัตโนมัติ")) {
-        google.script.run.withSuccessHandler((res) => {
-          alert(res.message);
-          if (res && res.success) {
-            this.loadHistoryData(); 
-            // เปลี่ยนชื่อให้ตรงกับระบบหลักของคุณจาก loadProducts เป็น fetchProducts
-            if (typeof this.fetchProducts === 'function') {
-              this.fetchProducts(); 
-            }
-          }
-        }).cancelTransaction(txId);
+    HandleCancelBill(customerSheetId, txId) { // ✅ 1. เติม customerSheetId ไว้หน้าสุด
+  if (confirm("คุณแน่ใจหรือไม่ที่จะยกเลิกบิล " + txId + " ?\nระบบจะทำการคืนสินค้าทั้งหมดในบิลเข้าสต็อกให้อัตโนมัติ")) {
+    google.script.run.withSuccessHandler((res) => {
+      alert(res.message);
+      if (res && res.success) {
+        this.loadHistoryData(); 
+        // เปลี่ยนชื่อให้ตรงกับระบบหลักของคุณจาก loadProducts เป็น fetchProducts
+        if (typeof this.fetchProducts === 'function') {
+          this.fetchProducts(); 
+        }
       }
-    }
+    }).cancelTransaction(customerSheetId, txId); // ✅ 2. เติม customerSheetId ไว้หน้า txId
+  }
+}
 
   },
   mounted() {

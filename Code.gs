@@ -102,16 +102,24 @@ function processSale(customerSheetId, saleData) {
   }
 }
 
-/**
- * 4. ฟังก์ชันเปิดหน้าเว็บ (doGet)
- */
-function doGet(customerSheetId, e) {
+// ==========================================================
+// 1. ตั้งค่า ID สำหรับระบบ SaaS (ใส่ ID ของคุณให้เรียบร้อยแล้ว)
+// ==========================================================
+const ADMIN_SHEET_ID    = "17gIAKqnX3Hde5J7fcBjB8wTTaE7UP-nbLOHrLh-PRK4"; // ID ชีตแอดมิน
+const TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU"; // ID ชีตแม่แบบ POS
+
+// ==========================================================
+// 2. ฟังก์ชัน doGet(e) - ตัวรับลิงก์หลัก (ข้ามหน้าติดตั้งให้อัตโนมัติถ้าเคยติดตั้งแล้ว)
+// ==========================================================
+function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
   const txId = (e && e.parameter) ? (e.parameter.txId || e.parameter.receiptId || '') : '';
 
+  // 1️⃣ ถ้าเป็นการเปิดดูใบเสร็จ (ลูกค้าสแกน QR Code)
   if (page === 'receipt' && txId) {
     const tpl = HtmlService.createTemplateFromFile('Receipt');
     tpl.txId = txId;
+    tpl.customerSheetId = (e && e.parameter && e.parameter.sheetId) ? e.parameter.sheetId : '';
     
     return tpl.evaluate()
       .setTitle('ใบเสร็จรับเงิน')
@@ -119,21 +127,106 @@ function doGet(customerSheetId, e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  return HtmlService.createHtmlOutputFromFile('Index')
+  // 2️⃣ ดึงอีเมลของผู้ที่เปิดลิงก์เข้ามาใช้งาน
+  const userEmail = Session.getActiveUser().getEmail();
+
+  // 3️⃣ ค้นหา Sheet ID ของลูกค้าคนนี้จากชีตแอดมิน
+  const customerInfo = getCustomerSheetIdByEmail(userEmail);
+
+  // 4️⃣ ถ้ายังไม่มีในชีตแอดมิน -> เปิดหน้าเด้งติดตั้ง (Install.html)
+  if (!customerInfo.isInstalled) {
+    const tpl = HtmlService.createTemplateFromFile('Install');
+    tpl.userEmail = userEmail;
+    return tpl.evaluate()
+      .setTitle('ติดตั้งระบบ VEGA POS')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  }
+
+  // 5️⃣ ถ้าติดตั้งแล้ว -> เปิดหน้า POS (Index.html) พร้อมส่ง customerSheetId ไปใช้งาน
+  const tpl = HtmlService.createTemplateFromFile('Index');
+  tpl.customerSheetId = customerInfo.sheetId; 
+  
+  return tpl.evaluate()
     .setTitle('VEGA POS')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
 }
 
-/**
- * 5. ฟังก์ชันดึงข้อมูลใบเสร็จหลัก (เรียกใช้จาก Receipt.html)
- */
+// ==========================================================
+// 3. ฟังก์ชันค้นหา Sheet ID ในชีตแอดมิน จากอีเมลผู้ใช้
+// ==========================================================
+function getCustomerSheetIdByEmail(email) {
+  try {
+    const ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
+    const sheet = ss.getSheetByName('ชีต1'); // ชื่อแท็บด้านล่างของชีตแอดมิน
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim().toLowerCase() === String(email).trim().toLowerCase()) {
+        return {
+          isInstalled: true,
+          sheetId: data[i][1], // คอลัมน์ B: UserSheetID
+          status: data[i][4]    // คอลัมน์ E: Status
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Error finding customer:", err);
+  }
+  return { isInstalled: false };
+}
+
+// ==========================================================
+// 4. ฟังก์ชันติดตั้งระบบ 1-Click (ก๊อปปี้แม่แบบ + ลงตารางแอดมิน)
+// ==========================================================
+function installSystem() {
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    if (!userEmail) return { success: false, message: "ไม่พบอีเมลผู้ใช้งาน กรุณาลงชื่อเข้าใช้ Google" };
+
+    // ก๊อปปี้ Google Sheets แม่แบบ ออกมาเป็นไฟล์ใหม่ให้ลูกค้า
+    const templateFile = DriveApp.getFileById(TEMPLATE_SHEET_ID);
+    const newFile = templateFile.makeCopy("VEGA POS - " + userEmail);
+    newFile.addEditor(userEmail); // ให้สิทธิ์ลูกค้าเป็นผู้แก้ไข
+    const newSheetId = newFile.getId();
+
+    // คำนวณวันติดตั้ง และวันหมดอายุ (+30 วัน)
+    const now = new Date();
+    const expire = new Date();
+    expire.setDate(now.getDate() + 30);
+    const formatDate = (d) => Utilities.formatDate(d, "Asia/Bangkok", "d/M/yyyy, H:mm:ss");
+
+    // บันทึกลงตารางแอดมิน
+    const ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
+    const sheet = ss.getSheetByName('ชีต1');
+    sheet.appendRow([
+      userEmail,
+      newSheetId,
+      formatDate(now),
+      formatDate(expire),
+      "Active"
+    ]);
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
+// ==========================================================
+// 5. ฟังก์ชันดึงข้อมูลใบเสร็จ
+// ==========================================================
 function getReceiptDetail(customerSheetId, txId) {
   try {
     const sheet = SpreadsheetApp.openById(customerSheetId).getSheetByName('Transactions');
     if (!sheet) return { success: false, message: "ไม่พบชีตชื่อ Transactions" };
     
-    const storeConfig = getStoreConfig(customerSheetId) || {};
+    let storeConfig = {};
+    if (typeof getStoreConfig === 'function') {
+      storeConfig = getStoreConfig(customerSheetId) || {};
+    }
+
     const data = sheet.getDataRange().getValues();
     const targetTxId = String(txId).trim().toLowerCase();
     
@@ -141,7 +234,6 @@ function getReceiptDetail(customerSheetId, txId) {
       if (String(data[i][0]).trim().toLowerCase() === targetTxId) {
         
         let parsedItems = [];
-        // อ่าน JSON รายการสินค้าจาก คอลัมน์ H (Index 7)
         if (data[i][7]) {
           try {
             parsedItems = typeof data[i][7] === 'string' ? JSON.parse(data[i][7]) : data[i][7];

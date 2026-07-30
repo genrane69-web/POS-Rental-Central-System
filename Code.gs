@@ -110,7 +110,7 @@ const TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU"; // ID 
 // ==========================================================
 // 2. ฟังก์ชัน doGet(e) - ตัวรับลิงก์หลัก (ข้ามหน้าติดตั้งให้อัตโนมัติถ้าเคยติดตั้งแล้ว)
 // ==========================================================
-function doGet(customerSheetIdc, e) {
+function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
   const txId = (e && e.parameter) ? (e.parameter.txId || e.parameter.receiptId || '') : '';
 

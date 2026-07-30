@@ -1950,7 +1950,7 @@ openStoreConfigModal() {
 /**
  * 📊 ส่วนควบคุมหน้า DASHBOARD
  */
-function loadDashboardData() {
+function loadDashboardData(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
   const startDate = document.getElementById('dashStartDate')?.value || '';
   const endDate = document.getElementById('dashEndDate')?.value || '';
   const salesElement = document.getElementById('statTotalSales');
@@ -2014,7 +2014,7 @@ function loadDashboardData() {
       const el = document.getElementById('statTotalSales');
       if (el) el.innerText = 'Error';
     })
-    .getDashboardData(startDate, endDate); 
+    .getDashboardData(customerSheetId, startDate, endDate); // ✅ 2. เติม customerSheetId ไว้ตัวแรกสุดตรงนี้
 }
 
 function updateElementText(id, text) {

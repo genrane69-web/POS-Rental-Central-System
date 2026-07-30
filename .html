@@ -1492,53 +1492,53 @@ filteredSalesHistory() {
     setReceivedAmount(amt) {
       this.receivedAmount = amt;
     },
-    confirmCheckout() {
-      if (this.paymentMethod === 'เงินสด' && this.receivedAmount < this.totalAmount) {
-        alert("จำนวนเงินที่รับมาน้อยกว่ายอดสุทธิครับ");
-        return;
+    ConfirmCheckout(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
+  if (this.paymentMethod === 'เงินสด' && this.receivedAmount < this.totalAmount) {
+    alert("จำนวนเงินที่รับมาน้อยกว่ายอดสุทธิครับ");
+    return;
+  }
+  this.isProcessing = true;
+  const saleData = {
+    staffName: this.currentUser ? this.currentUser.name : 'พนักงาน',
+    paymentMethod: this.paymentMethod,
+    discount: this.calculatedDiscount,
+    totalAmount: this.totalAmount,
+    cart: this.cart
+  };
+  const saleSummary = {
+    total: this.totalAmount,
+    received: Number(this.receivedAmount),
+    change: this.changeAmount,
+    method: this.paymentMethod
+  };
+  google.script.run
+    .withSuccessHandler(res => {
+      this.isProcessing = false;
+      if (res.success) {
+        this.showPaymentModal = false;
+        this.completedSaleInfo = saleSummary;
+        this.saleSuccess = true;
+        this.fetchProducts();
+        if (this.paymentMethod === 'เงินสด') {
+          this.receivedCash = Number(this.receivedAmount);
+          this.openCashDrawer();
+        }
+        this.lastTxId = res.txId || ('TX-' + Date.now());
+        this.lastTotalAmount = this.totalAmount;
+        this.lastPaymentMethod = this.paymentMethod;
+        this.showReceiptModal = true;
+        this.generateReceiptQR(this.lastTxId);
+        this.cart = [];
+      } else {
+        alert("เกิดข้อผิดพลาด: " + res.message);
       }
-      this.isProcessing = true;
-      const saleData = {
-        staffName: this.currentUser ? this.currentUser.name : 'พนักงาน',
-        paymentMethod: this.paymentMethod,
-        discount: this.calculatedDiscount,
-        totalAmount: this.totalAmount,
-        cart: this.cart
-      };
-      const saleSummary = {
-        total: this.totalAmount,
-        received: Number(this.receivedAmount),
-        change: this.changeAmount,
-        method: this.paymentMethod
-      };
-      google.script.run
-        .withSuccessHandler(res => {
-          this.isProcessing = false;
-          if (res.success) {
-            this.showPaymentModal = false;
-            this.completedSaleInfo = saleSummary;
-            this.saleSuccess = true;
-            this.fetchProducts();
-            if (this.paymentMethod === 'เงินสด') {
-              this.receivedCash = Number(this.receivedAmount);
-              this.openCashDrawer();
-            }
-            this.lastTxId = res.txId || ('TX-' + Date.now());
-            this.lastTotalAmount = this.totalAmount;
-            this.lastPaymentMethod = this.paymentMethod;
-            this.showReceiptModal = true;
-            this.generateReceiptQR(this.lastTxId);
-            this.cart = [];
-          } else {
-            alert("เกิดข้อผิดพลาด: " + res.message);
-          }
-        })
-        .withFailureHandler(err => {
-          this.isProcessing = false;
-          alert("เกิดข้อผิดพลาดจากระบบ: " + err.message);
-        })
-        .processSale(saleData);
-    },
+    })
+    .withFailureHandler(err => {
+      this.isProcessing = false;
+      alert("เกิดข้อผิดพลาดจากระบบ: " + err.message);
+    })
+    .processSale(customerSheetId, saleData); // ✅ 2. เติม customerSheetId ไว้หน้าสุดตรงนี้
+},
     startNewSale() {
       this.cart = [];
       this.discount = 0;

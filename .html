@@ -2089,7 +2089,7 @@ function renderLowStockList(lowItems) {
   }
 }
 
-function checkOutOfStock() {
+function checkOutOfStock(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน (ใช้ f ตัวพิมพ์เล็ก)
   google.script.run
     .withSuccessHandler(function(response) {
       if (!response.success) {
@@ -2115,7 +2115,7 @@ function checkOutOfStock() {
         countEl.innerText = `รายการสินค้าทั้งหมด (แสดงเฉพาะสินค้าหมด/ติดลบ ${outOfStockItems.length} รายการ)`;
       }
     })
-    .getOutOfStockProducts();
+    .getOutOfStockProducts(customerSheetId); // ✅ 2. เติม customerSheetId เข้าไปตรงนี้
 }
 
 // เปิดหน้าต่างป๊อปอัพ

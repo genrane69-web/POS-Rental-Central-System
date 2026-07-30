@@ -1,6 +1,5 @@
 // ⚠️ เอา ID ที่คัดลอกมาจากขั้นตอนที่ 1 มาวางแทนที่ข้อความภาษาไทยในเครื่องหมายคำพูดนะครับ
-var TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU
-";
+var TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU";
 var ADMIN_SHEET_ID    = "17gIAKqnX3Hde5J7fcBjB8wTTaE7UP-nbLOHrLh-PRK4";
 
 function doGet(e) {

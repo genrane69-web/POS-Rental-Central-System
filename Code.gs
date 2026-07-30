@@ -103,7 +103,7 @@ function processSale(customerSheetId, saleData) {
 }
 
 // ==========================================================
-// 1. ตั้งค่า ID สำหรับระบบ SaaS (ใส่ ID ของคุณให้เรียบร้อยแล้ว)
+// 1. ตั้งค่า ID สำหรับระบบ SaaS
 // ==========================================================
 const ADMIN_SHEET_ID    = "17gIAKqnX3Hde5J7fcBjB8wTTaE7UP-nbLOHrLh-PRK4"; // ID ชีตแอดมิน
 const TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU"; // ID ชีตแม่แบบ POS
@@ -154,21 +154,32 @@ function doGet(e) {
 }
 
 // ==========================================================
-// 3. ฟังก์ชันค้นหา Sheet ID ในชีตแอดมิน จากอีเมลผู้ใช้
+// 3. ฟังก์ชันค้นหา Sheet ID ในชีตแอดมิน จากอีเมลผู้ใช้ (ปรับปรุงระบบเช็กไฟล์)
 // ==========================================================
 function getCustomerSheetIdByEmail(email) {
+  if (!email || String(email).trim() === "") return { isInstalled: false };
+
   try {
     const ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
     const sheet = ss.getSheetByName('ชีต1'); // ชื่อแท็บด้านล่างของชีตแอดมิน
     const data = sheet.getDataRange().getValues();
 
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim().toLowerCase() === String(email).trim().toLowerCase()) {
-        return {
-          isInstalled: true,
-          sheetId: data[i][1], // คอลัมน์ B: UserSheetID
-          status: data[i][4]    // คอลัมน์ E: Status
-        };
+      const cellEmail = String(data[i][0]).trim().toLowerCase();
+      if (cellEmail !== "" && cellEmail === String(email).trim().toLowerCase()) {
+        const sheetId = data[i][1];
+        
+        // เช็กว่าไฟล์ใน Google Drive ของลูกค้ารายนี้ยังอยู่ไหม (ถ้าโดนลบไปแล้ว จะพาไปหน้าติดตั้งใหม่)
+        try {
+          DriveApp.getFileById(sheetId);
+          return {
+            isInstalled: true,
+            sheetId: sheetId, // คอลัมน์ B: UserSheetID
+            status: data[i][4]  // คอลัมน์ E: Status
+          };
+        } catch (fileErr) {
+          return { isInstalled: false };
+        }
       }
     }
   } catch (err) {
@@ -200,13 +211,33 @@ function installSystem() {
     // บันทึกลงตารางแอดมิน
     const ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
     const sheet = ss.getSheetByName('ชีต1');
-    sheet.appendRow([
-      userEmail,
-      newSheetId,
-      formatDate(now),
-      formatDate(expire),
-      "Active"
-    ]);
+    const data = sheet.getDataRange().getValues();
+
+    // ค้นหาว่าเคยมีอีเมลนี้ในตารางไหม
+    let existingRowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim().toLowerCase() === String(userEmail).trim().toLowerCase()) {
+        existingRowIndex = i + 1; // +1 เพราะแถวใน Sheet เริ่มที่ 1
+        break;
+      }
+    }
+
+    if (existingRowIndex > 0) {
+      // ถ้าเคยมีอยู่แล้ว ให้ทับบรรทัดเดิม
+      sheet.getRange(existingRowIndex, 2).setValue(newSheetId);
+      sheet.getRange(existingRowIndex, 3).setValue(formatDate(now));
+      sheet.getRange(existingRowIndex, 4).setValue(formatDate(expire));
+      sheet.getRange(existingRowIndex, 5).setValue("Active");
+    } else {
+      // ถ้าเป็นคนใหม่ ให้เพิ่มแถวใหม่ต่อท้าย
+      sheet.appendRow([
+        userEmail,
+        newSheetId,
+        formatDate(now),
+        formatDate(expire),
+        "Active"
+      ]);
+    }
 
     return { success: true };
   } catch (error) {

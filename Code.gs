@@ -114,7 +114,7 @@ function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
   const txId = (e && e.parameter) ? (e.parameter.txId || e.parameter.receiptId || '') : '';
 
-  // 1️⃣ ถ้าเป็นการเปิดดูใบเสร็จ (ลูกค้าสแกน QR Code)
+  // 1️⃣ ถ้าเป็นการเปิดดูใบเสร็จ (ลูกค้าสแกน QR Code ดูใบเสร็จ)
   if (page === 'receipt' && txId) {
     const tpl = HtmlService.createTemplateFromFile('Receipt');
     tpl.txId = txId;
@@ -142,7 +142,17 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 5️⃣ ถ้าติดตั้งแล้ว -> เปิดหน้า POS (Index.html) พร้อมส่ง customerSheetId ไปใช้งาน
+  // 💡 5️⃣ เพิ่มใหม่: ถ้าต้องการเปิดหน้าสแกน QR Code (เรียกผ่าน ?page=scan)
+  if (page === 'scan') {
+    const tpl = HtmlService.createTemplateFromFile('Scanner'); // ดึงหน้า Scanner.html
+    tpl.customerSheetId = customerInfo.sheetId; // ส่ง Sheet ID ไปที่หน้าสแกน
+    return tpl.evaluate()
+      .setTitle('สแกน QR Code สลิป - VEGA POS')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  }
+
+  // 6️⃣ ถ้าติดตั้งแล้ว -> เปิดหน้า POS (Index.html) พร้อมส่ง customerSheetId ไปใช้งาน
   const tpl = HtmlService.createTemplateFromFile('Index');
   tpl.customerSheetId = customerInfo.sheetId; 
   
@@ -222,13 +232,13 @@ function installSystem() {
     }
 
     if (existingRowIndex > 0) {
-      // ถ้าเคยมีอยู่แล้ว ให้ทับบรรทัดเดิม
+      // ถ้าเคยมีอยู่แล้ว ให้ทับบรรทัดเดิม (ผูก Sheet ID ใบใหม่)
       sheet.getRange(existingRowIndex, 2).setValue(newSheetId);
       sheet.getRange(existingRowIndex, 3).setValue(formatDate(now));
       sheet.getRange(existingRowIndex, 4).setValue(formatDate(expire));
       sheet.getRange(existingRowIndex, 5).setValue("Active");
     } else {
-      // ถ้าเป็นคนใหม่ ให้เพิ่มแถวใหม่ต่อท้าย
+      // ถ้าเป็นคนใหม่ ให้เพิ่มแถวใหม่ต่อท้าย (ผูก Sheet ID ใหม่เข้ากับอีเมลผู้ใช้)
       sheet.appendRow([
         userEmail,
         newSheetId,
@@ -241,6 +251,45 @@ function installSystem() {
     return { success: true };
   } catch (error) {
     return { success: false, message: error.toString() };
+  }
+}
+
+// ==========================================================
+// 💡 5. เพิ่มใหม่: ฟังก์ชันค้นหาข้อมูลสลิปจาก QR Code (ผูกกับ Sheet ID ของผู้ใช้งานอัตโนมัติ)
+// ==========================================================
+function searchSlipData(qrContent) {
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    const customerInfo = getCustomerSheetIdByEmail(userEmail);
+
+    if (!customerInfo.isInstalled || !customerInfo.sheetId) {
+      return { found: false, message: "ไม่พบข้อมูลการติดตั้งระบบของคุณ" };
+    }
+
+    // เปิด Google Sheet ของผู้ใช้นั้นๆ ตาม Sheet ID ที่ถูกผูกไว้ตอนติดตั้ง
+    const ss = SpreadsheetApp.openById(customerInfo.sheetId);
+    
+    // ✏️ เปลี่ยนชื่อแท็บตรงนี้ให้ตรงกับแท็บที่เก็บสลิปใน TEMPLATE_SHEET_ID ของคุณ (เช่น 'Sales' หรือ 'Receipts')
+    const sheet = ss.getSheets()[0]; // ดึงแท็บแรก หรือระบุ ss.getSheetByName('ชื่อแท็บ');
+    const data = sheet.getDataRange().getValues();
+
+    // ค้นหาเลขสลิปจากคอลัมน์ A (index 0)
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(qrContent).trim()) {
+        return {
+          found: true,
+          receiptNo: data[i][0], // คอลัมน์ A
+          date: data[i][1],      // คอลัมน์ B
+          amount: data[i][2],    // คอลัมน์ C
+          status: data[i][3] || 'สมบูรณ์' // คอลัมน์ D
+        };
+      }
+    }
+
+    return { found: false, message: "ไม่พบข้อมูลสลิปนี้ในคลังข้อมูลของคุณ" };
+
+  } catch (err) {
+    return { found: false, message: "เกิดข้อผิดพลาดในการค้นหา: " + err.toString() };
   }
 }
 

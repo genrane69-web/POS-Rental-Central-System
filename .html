@@ -2167,7 +2167,7 @@ function loadStaffList() {
 }
 
 // บันทึกพนักงานใหม่
-function addStaff() {
+function addStaff(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
   var name = document.getElementById('staffNameInput').value;
   var pin = document.getElementById('staffPinInput').value;
   var role = document.getElementById('staffRoleInput').value;
@@ -2183,7 +2183,7 @@ function addStaff() {
       document.getElementById('staffNameInput').value = '';
       document.getElementById('staffPinInput').value = '';
       loadStaffList();
-    }).saveNewStaff(name, pin, role);
+    }).saveNewStaff(customerSheetId, name, pin, role); // ✅ 2. เติม customerSheetId ไว้หน้าสุดตรงนี้
   }
 }
 

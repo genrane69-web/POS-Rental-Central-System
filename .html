@@ -2251,7 +2251,7 @@ function savePaymentSettingsFromUI() {
 }
 
 // ฟังก์ชันดึงเลขบัญชีธนาคารมาโชว์ในกล่องชำระเงิน
-function updateBankDetailsDisplay() {
+function updateBankDetailsDisplay(customerSheetId) { // ✅ 1. เติม customerSheetId ที่หัวฟังก์ชัน
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     google.script.run.withSuccessHandler(function(res) {
       if (res && res.success && res.data) {
@@ -2263,7 +2263,7 @@ function updateBankDetailsDisplay() {
         if (accNumElem) accNumElem.innerText = res.data.account_number || '-';
         if (accNameElem) accNameElem.innerText = res.data.account_name || '-';
       }
-    }).getPaymentSettings();
+    }).getPaymentSettings(customerSheetId); // ✅ 2. เติม customerSheetId เข้าไปตรงนี้
   }
 }
 

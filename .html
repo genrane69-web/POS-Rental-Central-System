@@ -1850,45 +1850,45 @@ loadHistoryData(customerSheetId) { // ✅ 1. เติม customerSheetId ที
   }).getShiftHistory(customerSheetId, startDate, endDate); // ✅ 3. เติม customerSheetId ไว้ตัวแรกสุด
 },
 
-           viewBillDetails(tx) {
-      // 1. แยกแยะว่าส่งมาเป็น Object บิล หรือส่งมาเป็น รหัสบิล (ID)
-      if (typeof tx === 'object' && tx !== null) {
-        this.selectedBill = tx;
-      } else {
-        const txId = tx;
-        if (this.transactions && Array.isArray(this.transactions)) {
-          this.selectedBill = this.transactions.find(t => 
-            (t.id == txId || t.txId == txId || t.TxID == txId || t.TransactionID == txId || t['Transaction ID'] == txId)
-          ) || { id: txId };
-        } else {
-          this.selectedBill = { id: txId };
-        }
+           ViewBillDetails(customerSheetId, tx) { // ✅ 1. เติม customerSheetId ไว้ตัวแรกสุด
+  // 1. แยกแยะว่าส่งมาเป็น Object บิล หรือส่งมาเป็น รหัสบิล (ID)
+  if (typeof tx === 'object' && tx !== null) {
+    this.selectedBill = tx;
+  } else {
+    const txId = tx;
+    if (this.transactions && Array.isArray(this.transactions)) {
+      this.selectedBill = this.transactions.find(t => 
+        (t.id == txId || t.txId == txId || t.TxID == txId || t.TransactionID == txId || t['Transaction ID'] == txId)
+      ) || { id: txId };
+    } else {
+      this.selectedBill = { id: txId };
+    }
+  }
+
+  const targetId = (typeof tx === 'object')
+    ? (tx.id || tx.txId || tx.TxID || tx.TransactionID || tx['Transaction ID']) 
+    : tx;
+
+  // 2. ดึงรายการสินค้าจากหลังบ้าน
+  google.script.run.withSuccessHandler((res) => {
+    if (res && res.success) {
+      this.currentBillItems = res.items || [];
+      
+      // 🟢 นำข้อมูลจากสินค้าชิ้นแรกใน CashLogs มาแปะหัวบิลอัตโนมัติ (กันหัวบิลว่าง)
+      if (this.currentBillItems.length > 0) {
+        const firstItem = this.currentBillItems[0];
+        this.selectedBill = {
+          id: targetId || firstItem.TxID || firstItem.txId || firstItem.id,
+          timestamp: firstItem.Timestamp || firstItem.timestamp || firstItem.date,
+          staff: firstItem.StaffName || firstItem.staffName || firstItem.staff || 'แอดมิน',
+          paymentMethod: firstItem.PaymentMethod || firstItem.paymentMethod || firstItem.payment || 'โอนเงิน'
+        };
       }
-
-      const targetId = (typeof tx === 'object')
-        ? (tx.id || tx.txId || tx.TxID || tx.TransactionID || tx['Transaction ID']) 
-        : tx;
-
-      // 2. ดึงรายการสินค้าจากหลังบ้าน
-      google.script.run.withSuccessHandler((res) => {
-        if (res && res.success) {
-          this.currentBillItems = res.items || [];
-          
-          // 🟢 นำข้อมูลจากสินค้าชิ้นแรกใน CashLogs มาแปะหัวบิลอัตโนมัติ (กันหัวบิลว่าง)
-          if (this.currentBillItems.length > 0) {
-            const firstItem = this.currentBillItems[0];
-            this.selectedBill = {
-              id: targetId || firstItem.TxID || firstItem.txId || firstItem.id,
-              timestamp: firstItem.Timestamp || firstItem.timestamp || firstItem.date,
-              staff: firstItem.StaffName || firstItem.staffName || firstItem.staff || 'แอดมิน',
-              paymentMethod: firstItem.PaymentMethod || firstItem.paymentMethod || firstItem.payment || 'โอนเงิน'
-            };
-          }
-          
-          this.showBillDetailModal = true;
-        }
-      }).getTransactionItems(targetId);
-    },
+      
+      this.showBillDetailModal = true;
+    }
+  }).getTransactionItems(customerSheetId, targetId); // ✅ 2. เติม customerSheetId ไว้หน้า targetId
+},
 
 openStaffModal() {
   const modal = document.getElementById('staffModal');

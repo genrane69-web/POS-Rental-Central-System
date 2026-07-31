@@ -117,7 +117,7 @@ function doGet(e) {
     if (!adminEmail || adminEmail.trim().toLowerCase() !== SUPER_ADMIN_EMAIL.trim().toLowerCase()) {
       return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#e11d48;">🚫 ไม่มีสิทธิ์เข้าถึงหน้านี้</div>');
     }
-    return HtmlService.createTemplateFromFile('SuperAdmin').evaluate()
+    return HtmlService.createTemplateFromFile('SuperAd').evaluate()
       .setTitle('จัดการผู้เช่า - VEGA POS')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');

@@ -212,56 +212,32 @@ function getCustomerSheetIdByEmail(email) {
   return { isInstalled: false };
 }
 
-// ==========================================================
-// 4. ฟังก์ชันติดตั้งระบบ 1-Click (ก๊อปปี้แม่แบบ + ลงตารางแอดมิน)
-// ==========================================================
 function installSystem() {
   try {
     const userEmail = Session.getActiveUser().getEmail();
     if (!userEmail) return { success: false, message: "ไม่พบอีเมลผู้ใช้งาน กรุณาลงชื่อเข้าใช้ Google" };
 
-    // ก๊อปปี้ Google Sheets แม่แบบ ออกมาเป็นไฟล์ใหม่ให้ลูกค้า
+    // ⚠️ กันไม่ให้ติดตั้งซ้ำทับของเดิม ถ้าเคยมีบัญชีนี้อยู่แล้วในระบบ
+    const existing = getCustomerSheetIdByEmail(userEmail);
+    if (existing.isInstalled) {
+      return { success: false, message: "บัญชีนี้เคยติดตั้งระบบไปแล้ว ไม่สามารถติดตั้งซ้ำได้ กรุณาต่ออายุหรือติดต่อผู้ดูแลระบบแทน" };
+    }
+
     const templateFile = DriveApp.getFileById(TEMPLATE_SHEET_ID);
     const newFile = templateFile.makeCopy("VEGA POS - " + userEmail);
-    newFile.addEditor(userEmail); // ให้สิทธิ์ลูกค้าเป็นผู้แก้ไข
+    newFile.addEditor(userEmail);
     const newSheetId = newFile.getId();
 
-    // คำนวณวันติดตั้ง และวันหมดอายุ (+30 วัน)
     const now = new Date();
     const expire = new Date();
     expire.setDate(now.getDate() + 30);
     const formatDate = (d) => Utilities.formatDate(d, "Asia/Bangkok", "d/M/yyyy, H:mm:ss");
 
-    // บันทึกลงตารางแอดมิน
     const ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
     const sheet = ss.getSheetByName('ชีต1');
-    const data = sheet.getDataRange().getValues();
 
-    // ค้นหาว่าเคยมีอีเมลนี้ในตารางไหม
-    let existingRowIndex = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim().toLowerCase() === String(userEmail).trim().toLowerCase()) {
-        existingRowIndex = i + 1; // +1 เพราะแถวใน Sheet เริ่มที่ 1
-        break;
-      }
-    }
-
-    if (existingRowIndex > 0) {
-      // ถ้าเคยมีอยู่แล้ว ให้ทับบรรทัดเดิม
-      sheet.getRange(existingRowIndex, 2).setValue(newSheetId);
-      sheet.getRange(existingRowIndex, 3).setValue(formatDate(now));
-      sheet.getRange(existingRowIndex, 4).setValue(formatDate(expire));
-      sheet.getRange(existingRowIndex, 5).setValue("Active");
-    } else {
-      // ถ้าเป็นคนใหม่ ให้เพิ่มแถวใหม่ต่อท้าย
-      sheet.appendRow([
-        userEmail,
-        newSheetId,
-        formatDate(now),
-        formatDate(expire),
-        "Active"
-      ]);
-    }
+    // เช็กแล้วว่าเป็นคนใหม่จริงๆ (ไม่มีแถวเดิม) เพิ่มแถวใหม่ได้เลย
+    sheet.appendRow([userEmail, newSheetId, formatDate(now), formatDate(expire), "Active"]);
 
     return { success: true };
   } catch (error) {

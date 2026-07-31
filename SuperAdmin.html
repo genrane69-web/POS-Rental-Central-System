@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จัดการผู้เช่า - VEGA POS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Prompt', sans-serif; background-color: #070a11; color: #f8fafc; }
+  </style>
+</head>
+<body class="p-4 max-w-4xl mx-auto">
+
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-lg font-bold text-emerald-400">👑 จัดการผู้เช่า VEGA POS</h1>
+    <button onclick="loadTenants()" class="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-slate-300">🔄 รีเฟรช</button>
+  </div>
+
+  <div id="loading" class="text-center py-10 text-slate-500 text-sm">กำลังโหลด...</div>
+  <div id="errorBox" class="hidden bg-rose-950/40 border border-rose-800 text-rose-300 text-xs p-3 rounded-xl mb-3"></div>
+
+  <div id="tenantList" class="space-y-3"></div>
+
+  <script>
+    function loadTenants() {
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('errorBox').classList.add('hidden');
+      document.getElementById('tenantList').innerHTML = '';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          document.getElementById('loading').classList.add('hidden');
+          if (!res.success) {
+            showError(res.message || 'โหลดข้อมูลไม่สำเร็จ');
+            return;
+          }
+          renderTenants(res.tenants);
+        })
+        .withFailureHandler(err => {
+          document.getElementById('loading').classList.add('hidden');
+          showError(err.message || String(err));
+        })
+        .getAllTenants();
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = '❌ ' + msg;
+      box.classList.remove('hidden');
+    }
+
+    function renderTenants(tenants) {
+      const container = document.getElementById('tenantList');
+      if (!tenants || tenants.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 text-xs py-8">ยังไม่มีผู้เช่าในระบบ</div>';
+        return;
+      }
+
+      container.innerHTML = tenants.map(t => {
+        let badgeColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        let badgeText = 'ใช้งานปกติ (' + t.daysLeft + ' วัน)';
+        if (t.status !== 'Active') {
+          badgeColor = 'bg-slate-600/30 text-slate-400 border-slate-600/40';
+          badgeText = 'ถูกระงับ';
+        } else if (t.isExpired) {
+          badgeColor = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
+          badgeText = 'หมดอายุแล้ว';
+        } else if (t.daysLeft !== null && t.daysLeft <= 3) {
+          badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+          badgeText = 'ใกล้หมดอายุ (' + t.daysLeft + ' วัน)';
+        }
+
+        return `
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-xs space-y-2">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0">
+                <div class="font-bold text-white text-sm truncate">${t.email}</div>
+                <div class="text-slate-500 text-[10px] mt-0.5">ติดตั้งเมื่อ: ${t.installDate}</div>
+              </div>
+              <span class="px-2 py-1 rounded-lg border font-bold text-[11px] whitespace-nowrap ${badgeColor}">${badgeText}</span>
+            </div>
+            <div class="text-slate-400">หมดอายุ: <span class="text-slate-200">${t.expireDate}</span></div>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              <button onclick="extend('${t.email}', 30)" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-600/40 px-2.5 py-1 rounded-lg font-bold text-[11px]">+30 วัน</button>
+              <button onclick="extend('${t.email}', 7)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-lg font-bold text-[11px]">+7 วัน</button>
+              ${t.status === 'Active'
+                ? `<button onclick="suspend('${t.email}')" class="bg-rose-900/40 hover:bg-rose-800 text-rose-300 border border-rose-700/60 px-2.5 py-1 rounded-lg font-bold text-[11px]">ระงับ</button>`
+                : `<button onclick="activate('${t.email}')" class="bg-blue-900/40 hover:bg-blue-800 text-blue-300 border border-blue-700/60 px-2.5 py-1 rounded-lg font-bold text-[11px]">เปิดใช้งาน</button>`
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function extend(email, days) {
+      if (!confirm('ต่ออายุ ' + email + ' อีก ' + days + ' วัน ใช่ไหม?')) return;
+      google.script.run
+        .withSuccessHandler(res => { alert(res.message); loadTenants(); })
+        .withFailureHandler(err => alert('เกดข้อผิดพลาด: ' + (err.message || err)))
+        .manualExtendTenant(email, days);
+    }
+
+    function suspend(email) {
+      if (!confirm('ระงับการใช้งาน ' + email + ' ใช่ไหม?')) return;
+      google.script.run
+        .withSuccessHandler(res => { alert(res.message); loadTenants(); })
+        .withFailureHandler(err => alert('เกิดข้อผิดพลาด: ' + (err.message || err)))
+        .suspendTenant(email);
+    }
+
+    function activate(email) {
+      google.script.run
+        .withSuccessHandler(res => { alert(res.message); loadTenants(); })
+        .withFailureHandler(err => alert('เกิดข้อผิดพลาด: ' + (err.message || err)))
+        .activateTenant(email);
+    }
+
+    loadTenants();
+  </script>
+</body>
+</html>

@@ -107,12 +107,21 @@ function processSale(customerSheetId, saleData) {
 const ADMIN_SHEET_ID    = "17gIAKqnX3Hde5J7fcBjB8wTTaE7UP-nbLOHrLh-PRK4"; // ID ชีตแอดมิน
 const TEMPLATE_SHEET_ID = "17D9HFfhNY1KIazj3AoGTrjMD22GVdAP5kuhQlQmu1QU"; // ID ชีตแม่แบบ POS
 
-// ==========================================================
-// 2. ฟังก์ชัน doGet(e) - ตัวรับลิงก์หลัก (ขามหน้าติดตั้งให้อัตโนมัติถ้าเคยติดตั้งแล้ว)
-// ==========================================================
 function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
   const txId = (e && e.parameter) ? (e.parameter.txId || e.parameter.receiptId || '') : '';
+
+  // 0️⃣ หน้า Super Admin (จัดการผู้เช่าทั้งหมด — เฉพาะเจ้าของระบบ)
+  if (page === 'superadmin') {
+    const adminEmail = Session.getActiveUser().getEmail();
+    if (!adminEmail || adminEmail.trim().toLowerCase() !== SUPER_ADMIN_EMAIL.trim().toLowerCase()) {
+      return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#e11d48;">🚫 ไม่มีสิทธิ์เข้าถึงหน้านี้</div>');
+    }
+    return HtmlService.createTemplateFromFile('SuperAdmin').evaluate()
+      .setTitle('จัดการผู้เช่า - VEGA POS')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  }
 
   // 1️⃣ ถ้าเป็นการเปิดดูใบเสร็จ (ลูกค้าสแกน QR Code)
   if (page === 'receipt' && txId) {
@@ -126,26 +135,44 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 2️⃣ ดึงอีเมลของผู้ที่เปิดลิงกเข้ามาใช้งาน
+  // 2️⃣ ดึงอีเมลของผู้ที่เปิดลิงก์เข้ามาใช้งาน
   const userEmail = Session.getActiveUser().getEmail();
 
-  // 3️⃣ ค้นหา Sheet ID ของลูกคาคนนี้จากชีตแอดมิน
+  // 3️⃣ ค้นหา Sheet ID ของลูกค้าคนนี้จากชีตแอดมิน
   const customerInfo = getCustomerSheetIdByEmail(userEmail);
 
   // 4️⃣ ถ้ายังไม่มีในชีตแอดมิน -> เปิดหน้าเด้งติดตั้ง (Install.html)
   if (!customerInfo.isInstalled) {
     const tpl = HtmlService.createTemplateFromFile('Install');
     tpl.userEmail = userEmail;
+    tpl.expiredMessage = '';
     return tpl.evaluate()
       .setTitle('ติดตั้งระบบ VEGA POS')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 5️⃣ ถ้าติดตั้งแล้ว -> เปิดหน้า POS (Index.html) พร้อมส่ง customerSheetId ไปใช้งาน
+  // 4.5️⃣ หมดอายุ หรือถูกระงับ -> เปิดหน้าต่ออายุ
+  const expireDate = customerInfo.expireDate ? parseCustomDate(null, customerInfo.expireDate) : null;
+  const isExpired = expireDate ? (new Date() > expireDate) : false;
+  const isSuspended = String(customerInfo.status || '').trim() !== 'Active';
+
+  if (isExpired || isSuspended) {
+    const tpl = HtmlService.createTemplateFromFile('Install');
+    tpl.userEmail = userEmail;
+    tpl.expiredMessage = isExpired
+      ? 'แพ็กเกจของคุณหมดอายุแล้ว กรุณาต่ออายุเพื่อใช้งานต่อ'
+      : 'บัญชีของคุณถูกระงับการใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบ';
+    return tpl.evaluate()
+      .setTitle('ต่ออายุ VEGA POS')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  }
+
+  // 5️⃣ ถ้าติดตั้งแล้วและยังใช้งานได้ -> เปิดหน้า POS (Index.html)
   const tpl = HtmlService.createTemplateFromFile('Index');
   tpl.customerSheetId = customerInfo.sheetId; 
-  tpl.webAppUrl = ScriptApp.getService().getUrl(); // ← บรรทัดใหม่ที่เพิ่มเข้ามา
+  tpl.webAppUrl = ScriptApp.getService().getUrl();
   
   return tpl.evaluate()
     .setTitle('VEGA POS')

@@ -153,29 +153,26 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
 }
 
-// ==========================================================
-// 3. ฟังก์ชันค้นหา Sheet ID ในชีตแอดมิน จากอีเมลผู้ใช้ (ปรับปรุงระบบเช็กไฟล์)
-// ==========================================================
 function getCustomerSheetIdByEmail(email) {
   if (!email || String(email).trim() === "") return { isInstalled: false };
 
   try {
     const ss = SpreadsheetApp.openById(ADMIN_SHEET_ID);
-    const sheet = ss.getSheetByName('ชีต1'); // ชื่อแท็บด้านล่างของชีตแอดมิน
+    const sheet = ss.getSheetByName('ชีต1');
     const data = sheet.getDataRange().getValues();
 
     for (let i = 1; i < data.length; i++) {
       const cellEmail = String(data[i][0]).trim().toLowerCase();
       if (cellEmail !== "" && cellEmail === String(email).trim().toLowerCase()) {
         const sheetId = data[i][1];
-        
-        // เช็กว่าไฟล์ใน Google Drive ของลูกค้ารายนี้ยังอยู่ไหม (ถ้าโดนลบไปแล้ว จะพาไปหน้าติดตั้งใหม่)
+
         try {
           DriveApp.getFileById(sheetId);
           return {
             isInstalled: true,
-            sheetId: sheetId, // คอลัมน์ B: UserSheetID
-            status: data[i][4]  // คอลัมน์ E: Status
+            sheetId: sheetId,
+            status: data[i][4],
+            expireDate: data[i][3]   // ← เพิ่มบรรทัดนี้
           };
         } catch (fileErr) {
           return { isInstalled: false };

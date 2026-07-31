@@ -9,8 +9,8 @@
 // ⚠️ ยังไม่ต้องใสตอนนี้ — รอสมัคร Omise แล้วมี Public/Secret Key ค่อยแทนที่ตรงนี้
 // ตอนทดสอบใช้ key ที่ขึ้นต้นด้วย pkey_test_ / skey_test_ ก่อน
 // พอใช้งานจริงค่อยเปลี่ยนเป็น pkey_live_ / skey_live_
-const OMISE_PUBLIC_KEY = "pkey_test_XXXXXXXXXXXXXXXXXXX"; // 🔑 ใส่ Public Key ตรงนี้
-const OMISE_SECRET_KEY = "skey_test_XXXXXXXXXXXXXXXXXXX"; // 🔑 ใส่ Secret Key ตรงนี้
+const OMISE_PUBLIC_KEY = "pkey_test_68irdufiu38kxwnn298";
+const OMISE_SECRET_KEY = "skey_test_68irdug165wnf64t396";// 🔑 ใส่ Secret Key ตรงนี้
 
 const RENEWAL_AMOUNT_BAHT = 199; // ราคาต่ออายต่อครั้ง (บาท) — ปรับตามที่ต้องการ
 const RENEWAL_DAYS = 30;         // จำนวนวันที่ต่ออายุให้ต่อการชำระเงิน 1 ครั้ง

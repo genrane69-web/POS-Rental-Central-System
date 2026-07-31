@@ -1,0 +1,2545 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VEGA POS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { background-color: #070a11; color: #f8fafc; font-family: sans-serif; }
+    /* เพิ่ม เอฟเฟกต์เรืองแสง Vibrant Neon */
+    .glow-green { box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+    .glow-amber { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+    .glow-purple { box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
+    .glow-rose { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
+    .glow-card { transition: all 0.2s ease-in-out; }
+    .glow-card:hover { transform: translateY(-2px); }
+    .glow-card:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+<div id="app" class="min-h-screen">
+
+  <!-- ========================================== -->
+  <!-- ส่วนที่ 1: หน้าเข้าสู่ระบบ (แสดงตอนยังไม่ได้ล็อกอิน) -->
+  <!-- ========================================== -->
+  <div v-if="!currentUser" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-xs w-full text-center space-y-4 shadow-2xl">
+      <div class="text-4xl">🪎</div>
+      <h1 class="text-xl font-bold text-emerald-400">เข้าสู่ระบบ VEGA POS</h1>
+      <p class="text-xs text-slate-400">กรอกรหัส PIN เพื่อเข้าใช้งาน</p>
+      <input
+        v-model="inputPin"
+        type="password"
+        maxlength="6"
+        placeholder="......"
+        @keyup.enter="login"
+        class="w-full text-center text-2xl tracking-widest bg-slate-800 border border-slate-700 py-3 rounded-xl text-white outline-none focus:ring-2 ring-emerald-500">
+      <button
+        @click="login"
+        :disabled="isLoggingIn || !inputPin"
+        class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition">
+        <span v-if="!isLoggingIn">เข้าสู่ระบบ</span>
+        <span v-else>กำลังตรวจสอบ...</span>
+      </button>
+      <p v-if="loginError" class="text-xs text-red-400 font-semibold">{{ loginError }}</p>
+      <p class="text-[10px] text-slate-600 pt-1">พัฒนาด้วยความช่วยเหลือของ Claude AI</p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- ส่วนที่ 2: หน้าหลักของระบบ (แสดงเมื่อเป็น พนักงาน หรือ แอดมิน) -->
+  <!-- ========================================== -->
+  <div v-else-if="currentUser && currentUser.role !== 'customer'" class="p-4 max-w-6xl mx-auto space-y-4">
+    
+    <!-- Header แถบบน (ฉบับปรับแต่งความสวยงาม + แสงนีออน) -->
+    <header class="bg-[#0f172a]/90 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-xl flex flex-wrap justify-between items-center gap-2">
+      <!-- ฝั่งซ้าย: โลโก้ และ ป้ายบอกสิทธิ์ใช้งาน -->
+      <div class="flex items-center space-x-3">
+        <span class="text-lg font-extrabold bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent">🛒 VEGA POS</span>
+        <!-- ป้าย Admin / Staff -->
+        <span class="text-xs px-3 py-1 rounded-full font-semibold border shadow-sm"
+              :class="['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase()) 
+                ? 'bg-purple-950/60 text-purple-300 border-purple-500/50 glow-purple' 
+                : 'bg-blue-950/60 text-blue-300 border-blue-500/50'">
+          {{ ['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase()) ? '👑 Admin' : 'Staff' }}
+        </span>
+      </div>
+
+      <!-- ฝั่งขวา: กลุ่มปุ่มกดใช้งาน -->
+      <div class="flex items-center space-x-2 overflow-x-auto whitespace-nowrap max-w-full pb-1">
+        <button
+          @click="currentView = 'pos'"
+          :class="currentView === 'pos' ? 'bg-emerald-500 text-slate-950 font-bold glow-green' : 'bg-slate-800 text-slate-300 border border-slate-700'"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+          หน้าขาย
+        </button>
+
+        <button
+          @click="openCashMovementModal"
+          class="bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 glow-amber px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+          💸 เงินเข้า/ออก
+        </button>
+        
+        <button
+          v-if="['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase())"
+          @click="currentView = 'admin'"
+          :class="currentView === 'admin' ? 'bg-purple-600 text-white font-bold glow-purple' : 'bg-slate-800 text-slate-300 border border-slate-700'"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+          🗃️ แดชบอร์ด
+        </button>
+       
+        <button
+          @click="connectDrawer" 
+          :class="drawerPort ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'"
+          class="px-3 py-1.5 rounded-xl border text-xs font-bold transition active:scale-95 flex items-center gap-1">
+          <span>{{ drawerPort ? '🧮 ลิ้นชักพร้อมใช้' : '🧮 ลิ้นชัก USB' }}</span>
+        </button>
+
+				        <!-- ปุ่มจัดการพนักงาน (แก้แท็กปิดเป็น </button> เรียบร้อย) -->
+        <button
+          v-if="['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase())"
+          @click="openStaffModal()"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 bg-slate-800 text-cyan-400 border border-slate-700 hover:bg-slate-700">
+          🪪 จัดการพนักงาน
+        </button>
+
+				<!-- ปุ่มตั้งค่าชำระเงิน (เรียกผ่าน Vue methods) -->
+				<button
+				  v-if="['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase())"
+				  @click="openPaymentSettingsModal()"
+				  class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 bg-emerald-950/70 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-900/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]">
+				  💳 ตั้งค่าชำระเงิน
+				</button>
+				        
+        <!-- ปุ่มตั้งค่าบิลใบเสร็จ -->
+        <button
+          v-if="['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase())"
+          @click="openStoreConfigModal()"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition active:scale-95 bg-slate-800 text-amber-400 border border-slate-700 hover:bg-slate-700">
+          🧾 ตั้งค่าบิลใบเสร็จ
+        </button>
+
+        <button
+          v-if="activeShift"
+          @click="openCloseShiftModal"
+          class="bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+         💵 ปิดกะ
+        </button>
+
+        <button 
+          @click="logout" 
+          class="bg-slate-800 text-slate-400 border border-slate-700 hover:text-white px-3 py-1.5 rounded-xl text-xs font-bold transition active:scale-95">
+          🚪ออก
+        </button>
+      </div>
+    </header>
+
+    <!-- VIEW 1: หน้าขาย POS -->
+    <div v-if="currentView === 'pos'" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="md:col-span-2 space-y-4">
+        <input v-model="searchQuery" type="text" placeholder="🔍 ค้นหาสินค้า/บาร์โค้ด..."
+               class="w-full bg-slate-800 text-white px-3 py-2 rounded-lg text-sm border border-slate-700 outline-none focus:ring-2 ring-emerald-500">
+        
+        <div v-if="loading" class="text-center py-10 text-slate-400">กำลังโหลดสินค้า...</div>
+        
+        <div v-else class="space-y-3">
+          <!-- 1. แถบปุ่มเลือกหมวดหมู่สินค้า -->
+          <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button 
+              v-for="cat in categories" 
+              :key="cat"
+              @click="selectedCategory = cat"
+              :class="selectedCategory === cat 
+                ? 'bg-emerald-500 text-slate-950 font-extrabold glow-green' 
+                : 'bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/80'"
+              class="px-4 py-2 rounded-xl text-xs whitespace-nowrap transition active:scale-95 shadow-sm">
+              {{ cat }}
+            </button>
+          </div>
+
+          <!-- 2. ตารางการ์ดแสดงสินค้า -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <button
+              v-for="p in filteredProducts"
+              :key="p.barcode"
+              @click="addToCart(p)"
+              class="bg-[#0f172a] hover:bg-[#131c31] border border-slate-800 hover:border-emerald-500/50 glow-card p-3.5 rounded-2xl text-left flex flex-col justify-between transition group relative overflow-hidden shadow-md">
+              
+              <div>
+                <div class="font-medium text-slate-200 text-sm line-clamp-1 group-hover:text-emerald-400 transition">
+                  {{ p.name }}
+                </div>
+                <div class="text-[11px] text-slate-500 mt-0.5">
+                  รหัส: {{ p.barcode }}
+                </div>
+              </div>
+
+              <div class="flex justify-between items-end mt-3">
+                <span class="text-emerald-400 font-bold text-base tracking-tight">
+                  ฿{{ p.price }}
+                </span>
+                <span v-if="['admin', 'administrator'].includes(String(currentUser.role).trim().toLowerCase())" class="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700/60">
+                  เหลือ {{ p.stock }}
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+       
+      <!-- ตะกร้าสินค้า -->
+      <div class="bg-slate-800 border border-slate-700 p-4 rounded-xl flex flex-col justify-between h-[75vh]">
+        <div>
+          <h2 class="text-lg font-bold border-b border-slate-700 pb-2 mb-3">🛒 ตะกร้าสินค้า</h2>
+          <div class="space-y-2 overflow-y-auto max-h-[45vh]">
+            <div v-if="cart.length === 0" class="text-center text-slate-500 py-8 text-sm">ว่างเปล่า</div>
+            <div v-for="item in cart" :key="item.barcode" class="flex justify-between items-center bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/50 text-sm">
+              <div class="flex-1 min-w-0 mr-2">
+                <div class="font-medium text-white truncate">{{ item.name }}</div>
+                <div class="text-xs text-slate-400">฿{{ item.price }} x {{ item.qty }}</div>
+              </div>
+              <div class="flex items-center space-x-1">
+                <button @click="updateQty(item, -1)" class="w-6 h-6 bg-slate-700 text-amber-400 rounded font-bold">-</button>
+                <span class="w-6 text-center text-xs font-bold">{{ item.qty }}</span>
+                <button @click="updateQty(item, 1)" class="w-6 h-6 bg-slate-700 text-emerald-400 rounded font-bold">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-700 pt-3 space-y-3">
+          <!-- ช่องกรอกส่วนลด -->
+          <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-700 text-xs">
+            <div class="flex items-center space-x-1.5">
+              <span class="text-slate-300 font-medium">ส่วนลด:</span>
+              <div class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                <button
+                  @click="discountType = 'baht'"
+                  :class="discountType === 'baht' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded font-bold text-[11px] transition">฿</button>
+                <button
+                  @click="discountType = 'percent'"
+                  :class="discountType === 'percent' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'"
+                  class="px-2 py-0.5 rounded font-bold text-[11px] transition">%</button>
+              </div>
+            </div>
+            <div class="flex items-center space-x-1">
+              <input
+                v-model.number="discount"
+                type="number"
+                min="0"
+                :max="discountType === 'percent' ? 100 : subtotal"
+                placeholder="0"
+                class="w-20 bg-slate-800 border border-slate-600 text-right font-bold text-amber-400 px-2 py-1 rounded-lg outline-none focus:ring-1 ring-amber-400">
+              <span class="text-amber-400 font-bold">{{ discountType === 'baht' ? '฿' : '%' }}</span>
+            </div>
+          </div>
+
+          <!-- รายละเอียดสรุปยอดเงิน -->
+          <div class="space-y-1 text-xs text-slate-300">
+            <div class="flex justify-between">
+              <span>รวมเป็นเงิน:</span>
+              <span>฿{{ subtotal }}</span>
+            </div>
+            <div v-if="calculatedDiscount > 0" class="flex justify-between text-amber-400">
+              <span>หักส่วนลด {{ discountType === 'percent' ? '(' + discount + '%)' : '' }}:</span>
+              <span>-฿{{ calculatedDiscount }}</span>
+            </div>
+            <div class="flex justify-between text-lg font-extrabold text-emerald-400 pt-1 border-t border-slate-700">
+              <span>ยอดสุทธิ:</span>
+              <span>฿{{ totalAmount }}</span>
+            </div>
+          </div>
+          <!-- ปุ่มชำระเงิน -->
+          <button
+            @click="openPaymentModal"
+            :disabled="cart.length === 0"
+            class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 disabled:border-slate-700/50 disabled:shadow-none disabled:cursor-not-allowed text-slate-950 font-extrabold text-base rounded-xl glow-green transition active:scale-98 shadow-lg flex justify-center items-center gap-2">
+            <span>💳 ชำระเงิน (฿{{ totalAmount }})</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="currentView === 'admin'">
+
+  <!-- แถบปุ่มเมนูหลัก Admin -->
+<div class="flex flex-wrap gap-2 mb-4 bg-slate-900 p-1.5 rounded-xl border border-slate-700/80 w-fit">
+  <button 
+    @click="adminTab = 'stock'"
+    :class="adminTab === 'stock' ? 'bg-purple-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200'"
+    class="px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-2">
+    📦 จัดการสต็อกสินค้า
+  </button>
+
+  <button 
+    @click="adminTab = 'dashboard'"
+    :class="adminTab === 'dashboard' ? 'bg-purple-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200'"
+    class="px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-2">
+    📊 แดชบอร์ดสรุปยอด
+  </button>
+
+  <!-- 🌟 ปุ่มเมนูใหม่ที่เพิ่มเข้ามา -->
+  <button 
+    @click="adminTab = 'history'; applyHistoryDatePreset();"
+    :class="adminTab === 'history' ? 'bg-purple-600 text-white shadow-md font-bold' : 'text-slate-400 hover:text-slate-200'"
+    class="px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-2">
+    📜 ประวัติการขาย & ปิดกะ
+  </button>
+</div>
+
+  <div v-if="adminTab === 'stock'">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
+      <h2 class="text-lg font-bold text-purple-400">⚙️ เมนูจัดการสต็อก</h2>
+      <button @click="openProductModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition">
+        <span>+ เพิ่มสินค้าใหม่</span>
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4">
+      <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+        <h3 class="font-bold text-white mb-3 text-sm">
+          รายการสินค้าทั้งหมด (แสดง {{ adminFilteredProducts.length }} จาก {{ products.length }} รายการ)
+        </h3>
+
+        <div class="flex flex-wrap gap-2 items-center mb-4">
+          <input 
+            v-model="searchQuery" 
+            type="text" 
+            placeholder="🔍 ค้นหาชื่อสินค้า หรือ รหัสบาร์โค้ด..." 
+            class="bg-slate-800 text-slate-200 border border-slate-700 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-purple-500/80 flex-1 min-w-[200px]">
+
+          <select 
+            v-model="adminSelectedCategory"
+            class="bg-slate-800 text-slate-200 border border-slate-700 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-purple-500/80 transition cursor-pointer">
+            <option v-for="cat in categories" :key="cat" :value="cat">
+              📂 {{ cat }}
+            </option>
+          </select>
+
+					<!-- ปุ่มเช็กสินค้าหมด/ติดลบ (ปรับเป็นสไตล์ Vue.js) -->
+<button 
+  type="button" 
+  @click="isOutOfStockOnly = !isOutOfStockOnly" 
+  :class="isOutOfStockOnly ? 'bg-rose-600 text-white border-rose-500' : 'bg-rose-950/60 text-rose-300 border-rose-800/60'"
+  class="text-xs font-medium px-3 py-2 rounded-xl border flex items-center gap-1.5 transition cursor-pointer">
+  ⚠️ สินค้าหมด/ติดลบ {{ isOutOfStockOnly ? '(เปิดอยู่)' : '' }}
+</button>
+
+        </div>
+
+     <div class="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+  <div v-for="p in adminFilteredProducts" :key="p.barcode" class="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700 text-xs">
+    
+    <!-- ฝั่งซ้าย: ข้อมูลสินค้า -->
+    <div class="space-y-0.5">
+      <div class="font-bold text-white text-sm">{{ p.name }}</div>
+      <div class="text-slate-400">รหัส: {{ p.barcode }} | หมวด: {{ p.category || 'ทั่วไป' }}</div>
+      <div class="text-slate-300">ทุน: <span class="text-amber-400">฿{{ p.cost }}</span> | ขาย: <span class="text-emerald-400">฿{{ p.price }}</span></div>
+    </div>
+
+    <!-- ฝั่งขวา: ป้ายสต็อก + ปุ่มปรับสต็อก -->
+    <div class="flex items-center space-x-2">
+      <span
+        :class="{
+          'bg-red-500/20 text-red-400 border-red-500/30': p.stock <= 0,
+          'bg-amber-500/20 text-amber-400 border-amber-500/30': p.stock > 0 && p.stock <= (p.minStock || 5),
+          'bg-emerald-500/20 text-emerald-400 border-emerald-500/30': p.stock > (p.minStock || 5)
+        }"
+        class="px-2 py-1 rounded border text-[11px] font-bold">
+        {{ p.stock < 0 ? 'ติดลบ (' + p.stock + ')' : (p.stock === 0 ? 'หมด (0)' : (p.stock <= (p.minStock || 5) ? '! ใกล้หมด (' + p.stock + ')' : 'คงเหลือ ' + p.stock)) }}
+      </span>
+      
+      <div class="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-700">
+        <button @click="quickAdjustStock(p.barcode, -1)" title="ลด 1 ชิ้น" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-red-400 font-bold rounded flex items-center justify-center">-1</button>
+        <button @click="openAdjustModal(p)" title="รับสินค้าเข้า / ระบุจำนวนเอง" class="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold rounded flex items-center justify-center">+</button>
+      </div>
+
+      <button @click="openProductModal(p)" class="bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/40 px-2 py-1 rounded-lg transition font-bold text-xs">
+        ✏️
+      </button>
+    </div>
+
+  </div>
+</div>
+      </div>
+    </div>
+  </div>
+
+
+<div v-if="adminTab === 'dashboard'">
+  
+  <div class="p-3 sm:p-5 bg-slate-950 text-slate-100 rounded-3xl font-sans space-y-4">
+    
+    <!-- 1. HEADER & DATE FILTER (กะทัดรัด ไม่แย่งพื้นที่จอ) -->
+    <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-sm space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-base">
+            📊
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-slate-100 leading-tight">Admin Dashboard</h2>
+            <p class="text-[11px] text-slate-400">ภาพรวมร้านค้า</p>
+          </div>
+        </div>
+
+        <!-- ตัวเลือกช่วงเวลาด่วน -->
+        <select onchange="onPresetDateChange(this.value)" class="bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-semibold px-2.5 py-1.5 rounded-xl outline-none cursor-pointer">
+          <option value="today">วันนี้</option>
+          <option value="7days">7 วันย้อนหลัง</option>
+          <option value="thisMonth">เดือนนี้</option>
+          <option value="thisYear">ปีนี้</option>
+        </select>
+      </div>
+
+      <!-- ช่องเลือกวันที่แบบคู่ขนาน -->
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
+        <div class="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
+          <span class="text-[10px] text-slate-500 font-medium">เริ่ม:</span>
+          <input type="date" id="dashStartDate" class="bg-transparent border-none text-[11px] text-slate-200 outline-none w-full cursor-pointer" onchange="loadDashboardData()">
+        </div>
+        <div class="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
+          <span class="text-[10px] text-slate-500 font-medium">ถึง:</span>
+          <input type="date" id="dashEndDate" class="bg-transparent border-none text-[11px] text-slate-200 outline-none w-full cursor-pointer" onchange="loadDashboardData()">
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. HERO CARD (รวมยอดขาย + กำไรสุทธิ ไว้ในกล่องใหญ่ใบเดียวสไตล์แอปการเงิน) -->
+    <div class="bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 p-5 rounded-3xl border border-emerald-500/30 shadow-xl relative overflow-hidden space-y-4">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      
+      <!-- ครึ่งบน: ยอดขายรวม -->
+      <div class="flex justify-between items-start">
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">ยอดขายรวมทั้งหมด</span>
+          <div id="statTotalSales" class="text-3xl font-black text-white mt-0.5 tracking-tight">฿0</div>
+        </div>
+        <span id="statTotalOrders" class="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-emerald-400 font-semibold">0 บิล</span>
+      </div>
+
+      <!-- เส้นแบ่งดีไซน์บางๆ -->
+      <div class="h-px bg-gradient-to-r from-emerald-500/30 via-slate-700 to-transparent"></div>
+
+      <!-- ครึ่งล่าง: กำไรสุทธิ + ทุน + Margin -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-baseline">
+          <span class="text-xs font-bold text-emerald-400 flex items-center gap-1">📈 กำไรสุทธิ</span>
+          <span id="statMargin" class="text-[11px] text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md font-bold border border-emerald-500/30">Margin 0%</span>
+        </div>
+        <div class="flex justify-between items-end">
+          <div id="statNetProfit" class="text-2xl font-black text-emerald-400">฿0</div>
+          <div class="text-[11px] text-slate-400">
+            ทุนรวม: <strong id="statTotalCost" class="text-slate-200 font-semibold">฿0</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. COMPACT GRID (การ์ดย่อยแบบ 2 คอลัมน์ ไม่ยาวเกะกะจอ) -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      
+      <!-- เฉลี่ย/บิล -->
+      <div class="col-span-2 sm:col-span-1 bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-md flex justify-between items-center">
+        <div>
+          <span class="text-[11px] font-medium text-slate-400 block">เฉลี่ย / บิล</span>
+          <div id="statAvgOrder" class="text-lg font-bold text-blue-400 mt-0.5">฿0</div>
+        </div>
+        <div class="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-xs font-bold text-blue-400">
+          AVG
+        </div>
+      </div>
+
+      <!-- รับเงินสด -->
+      <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-[11px] font-medium text-slate-400">เงินสด</span>
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+        </div>
+        <div id="statCashSales" class="text-lg font-bold text-amber-400">฿0</div>
+      </div>
+
+      <!-- โอน / QR -->
+      <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-md">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-[11px] font-medium text-slate-400">โอน/QR</span>
+          <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+        </div>
+        <div id="statQrSales" class="text-lg font-bold text-purple-400">฿0</div>
+      </div>
+
+    </div>
+
+    <!-- 4. สินค้าขายดี & สต็อกใกล้หมด -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+      
+      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80">
+        <h3 class="text-xs font-bold text-slate-200 mb-3 flex items-center gap-1.5">
+          <span>🏆</span> 5 อันดับสินค้าขายดี
+        </h3>
+        <div id="topSellersList" class="space-y-2"></div>
+      </div>
+
+      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80">
+        <h3 class="text-xs font-bold text-rose-400 mb-3 flex items-center gap-1.5">
+          <span>⚠️</span> สินค้าสต็อกใกล้หมด (≤ 10 ชิ้น)
+        </h3>
+        <div id="lowStockList" class="space-y-2"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ========================================== -->
+<!-- ส่วนที่เพิ่มใหม่: หน้าประวัติการขาย & ปิดกะ -->
+<!-- ========================================== -->
+<div v-if="adminTab === 'history'" class="space-y-4">
+  
+  <!-- 1. ตัวเลือกช่วงเวลา + แท็ปสลับหน้าย่อย -->
+  <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
+    <div class="flex flex-wrap justify-between items-center gap-3">
+      
+      <!-- แท็ปสลับระหว่าง บิลการขาย vs ประวัติปิดกะ -->
+      <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <button 
+          @click="historySubTab = 'sales'"
+          :class="historySubTab === 'sales' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'"
+          class="px-3 py-1.5 rounded-lg text-xs transition">
+          🛒 ประวัติการขาย (บิล)
+        </button>
+        <button 
+          @click="historySubTab = 'shifts'"
+          :class="historySubTab === 'shifts' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'"
+          class="px-3 py-1.5 rounded-lg text-xs transition">
+          ⏳ ประวัติปิดกะ & เงินเข้า-ออก
+        </button>
+      </div>
+
+      <!-- ปุ่มเลือกช่วงเวลาด่วน -->
+      <div class="flex items-center gap-2">
+        <select v-model="historyDatePreset" @change="applyHistoryDatePreset" class="bg-slate-950 border border-slate-800 text-xs text-emerald-400 font-semibold px-2.5 py-1.5 rounded-xl outline-none">
+          <option value="today">วันนี้</option>
+          <option value="7days">7 วันย้อนหลัง</option>
+          <option value="thisMonth">เดือนนี้</option>
+          <option value="thisYear">ปีนี้</option>
+          <option value="all">ทั้งหมด</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ช่องเลือกวันที่แบบกำหนดเอง -->
+    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/60">
+      <div class="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+        <span class="text-[10px] text-slate-500">เริ่ม:</span>
+        <input type="date" v-model="historyStartDate" @change="onHistoryDateInputChange" class="bg-transparent text-xs text-slate-200 outline-none w-full">
+      </div>
+      <div class="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800">
+        <span class="text-[10px] text-slate-500">ถึง:</span>
+        <input type="date" v-model="historyEndDate" @change="onHistoryDateInputChange" class="bg-transparent text-xs text-slate-200 outline-none w-full">
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. แสดงรายการประวัติการขาย (บิล) -->
+  <div v-if="historySubTab === 'sales'" class="space-y-3">
+    <div class="text-xs text-slate-400 flex justify-between items-center px-1">
+      <span>รายการบิลการขาย (พบ {{ filteredSalesHistory.length }} บิล)</span>
+    </div>
+
+    <div v-if="filteredSalesHistory.length === 0" class="text-center py-10 bg-slate-900 rounded-2xl text-slate-500 text-xs">
+      ไม่พบบันทึกการขายในช่วงเวลานี้
+    </div>
+
+    <div v-for="sale in filteredSalesHistory" :key="sale.txId" class="bg-slate-900 p-3.5 rounded-2xl border border-slate-800 flex justify-between items-center text-xs">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-white text-sm">{{ sale.txId }}</span>
+          <span :class="sale.status === 'Cancelled' ? 'bg-rose-950 text-rose-400 border-rose-800' : 'bg-emerald-950 text-emerald-400 border-emerald-800'" class="px-2 py-0.5 rounded border text-[10px] font-bold">
+            {{ sale.status === 'Cancelled' ? 'ยกเลิกแล้ว' : 'สำเร็จ' }}
+          </span>
+        </div>
+        <div class="text-slate-400">🕒 {{ sale.timestamp }} | 👤 พนักงาน: {{ sale.staff }}</div>
+        <div class="text-slate-300">
+          ชำระโดย: <span class="text-purple-400 font-semibold">{{ sale.paymentMethod }}</span>
+          <span v-if="sale.discount > 0" class="text-amber-400 ml-2">(ส่วนลด ฿{{ sale.discount }})</span>
+        </div>
+      </div>
+
+      <div class="text-right space-y-2">
+        <div class="text-base font-black text-emerald-400">฿{{ sale.totalAmount }}</div>
+        <div class="flex gap-1.5 justify-end">
+          <button @click="viewBillDetails(sale.txId)" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg border border-slate-700 font-bold text-[11px]">
+            🔍 รายละเอียด
+          </button>
+          <button v-if="sale.status !== 'Cancelled'" @click="handleCancelBill(sale.txId)" class="bg-rose-900/40 hover:bg-rose-800 text-rose-300 px-2.5 py-1 rounded-lg border border-rose-700/60 font-bold text-[11px]">
+            ❌ ยกเลิกบิล
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- 3. แสดงประวัติปิดกะ & เงินเข้า-ออก (เวอร์ชันปรับขยายพื้นที่) -->
+<div v-if="historySubTab === 'shifts'" class="space-y-4">
+  
+  <!-- ส่วนกะการทำงาน (ขยายความสูงให้เห็นชัดเจนขึ้น) -->
+  <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
+    <h3 class="font-bold text-white text-sm flex items-center gap-2">
+      <span>⏳</span> ประวัติการเปิด-ปิดกะ
+    </h3>
+
+    <!-- 🔧 ขยายความสูง max-h-[60vh] ให้การ์ดยืดได้เยอะขึ้น -->
+    <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+      
+      <!-- ข้อความแสดงเมื่อไม่มีข้อมูล -->
+      <div v-if="!filteredShiftHistory || filteredShiftHistory.length === 0" class="text-center py-6 text-slate-500 text-xs">
+        ยังไม่มีประวัติการเปิด-ปิดกะ
+      </div>
+
+      <div v-for="s in filteredShiftHistory" :key="s.shiftId" class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <div>
+            <span class="font-bold text-emerald-400">{{ s.shiftId }}</span>
+            <span class="text-slate-400 ml-2">(พนักงาน: {{ s.staff }})</span>
+          </div>
+          <span :class="s.status === 'Closed' ? 'text-slate-400' : 'text-emerald-400 font-bold'">
+            {{ s.status === 'Closed' ? 'ปิดกะแล้ว' : '🟢 กำลังเปิดกะ' }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300 pt-1">
+          <div>เปิด: <span class="text-slate-100">{{ s.openTime }}</span></div>
+          <div>ปิด: <span class="text-slate-100">{{ s.closeTime || '-' }}</span></div>
+          <div>เงินทอนเริ่ม: <span class="text-amber-400">฿{{ s.startCash }}</span></div>
+          <div>ขายเงินสด: <span class="text-emerald-400">฿{{ s.cashSales }}</span></div>
+          <div>เงินเข้า: <span class="text-blue-400">฿{{ s.cashIn }}</span></div>
+          <div>เงินออก: <span class="text-rose-400">฿{{ s.cashOut }}</span></div>
+          <div>ยอดขายโอน: <span class="text-purple-400">฿{{ s.transferSales }}</span></div>
+          <div>รวมยอดขาย: <span class="font-bold text-white">฿{{ s.totalSales }}</span></div>
+        </div>
+
+        <div v-if="s.status === 'Closed'" class="flex justify-between items-center bg-slate-900 p-2 rounded-lg border border-slate-800/80 mt-1">
+          <span>เงินสดที่ต้องมี: <strong>฿{{ s.expectedCash }}</strong> | นับจริง: <strong>฿{{ s.actualCash }}</strong></span>
+          <span :class="s.difference < 0 ? 'text-rose-400' : (s.difference > 0 ? 'text-emerald-400' : 'text-slate-400')" class="font-bold">
+            {{ s.difference < 0 ? 'เงินขาด ฿' + s.difference : (s.difference > 0 ? 'เงินเกิน +฿' + s.difference : 'พอดี ฿0') }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ส่วนตารางเหตุผลการนำเงินเข้า/ออก (ขยายพื้นที่เช่นกัน) -->
+  <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
+    <h3 class="font-bold text-white text-sm flex items-center gap-2">
+      <span>💸</span> ประวัติการนำเงินเข้า - ถอนเงินออก (เหตุผลของพนักงาน)
+    </h3>
+
+    <!-- 🔧 ขยายความสูง max-h-[50vh] -->
+    <div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+      
+      <!-- ข้อความแสดงเมื่อไม่มีข้อมูล -->
+      <div v-if="!filteredCashMovements || filteredCashMovements.length === 0" class="text-center py-6 text-slate-500 text-xs">
+        ยังไม่มีประวัติการนำเงินเข้า-ออก
+      </div>
+
+      <div v-for="m in filteredCashMovements" :key="m.timestamp" class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs flex justify-between items-center">
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-2">
+            <span :class="m.type === 'Paid In' ? 'bg-blue-950 text-blue-400 border-blue-800' : 'bg-rose-950 text-rose-400 border-rose-800'" class="px-2 py-0.5 rounded border text-[10px] font-bold">
+              {{ m.type === 'Paid In' ? 'นำเงินเข้า' : 'เอาเงินออก' }}
+            </span>
+            <span class="font-bold text-white">฿{{ m.amount }}</span>
+            <span class="text-slate-400">โดย {{ m.staff }}</span>
+          </div>
+          <div class="text-amber-300 font-medium">เหตุผล: {{ m.reason || 'ไม่ระบุ' }} {{ m.detail ? '(' + m.detail + ')' : '' }}</div>
+          <div class="text-[10px] text-slate-500">🕒 {{ m.timestamp }} | กะ: {{ m.shiftId }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</div>
+
+<!-- 4. MODAL ป๊อบอัพแสดงรายละเอียดสินค้าในบิล (ปรับปรุงใบเสร็จแบบเต็ม) -->
+<div v-if="showBillDetailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+    
+    <!-- หัวข้อใบเสร็จ -->
+    <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🧾</span>
+        <h3 class="font-bold text-emerald-400 text-base">รายละเอียดใบเสร็จ</h3>
+      </div>
+      <button @click="showBillDetailModal = false" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+    </div>
+
+    <!-- ข้อมูลหัวบิล (เลขที่บิล, วันที่, พนักงาน, วิธีชำระ) -->
+    <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+      <div class="flex justify-between text-slate-300">
+        <span class="text-slate-400">เลขที่บิล:</span>
+        <span class="font-mono font-semibold text-emerald-400">
+          {{ (selectedBill && (selectedBill.id || selectedBill.txId || selectedBill.TxID || selectedBill.TransactionID || selectedBill['Transaction ID'])) || (currentBillItems[0] && (currentBillItems[0].TxID || currentBillItems[0].txId)) || '-' }}
+        </span>
+      </div>
+      <div class="flex justify-between text-slate-300">
+        <span class="text-slate-400">วันที่ - เวลา:</span>
+        <span class="text-slate-200">
+          {{ (selectedBill && (selectedBill.timestamp || selectedBill.Timestamp || selectedBill.date)) || (currentBillItems[0] && currentBillItems[0].Timestamp) || '-' }}
+        </span>
+      </div>
+      <div class="flex justify-between text-slate-300">
+        <span class="text-slate-400">พนักงานขาย:</span>
+        <span class="font-medium text-white">
+          {{ (selectedBill && (selectedBill.staff || selectedBill.staffName || selectedBill.StaffName || selectedBill.Staff)) || (currentBillItems[0] && currentBillItems[0].StaffName) || 'แอดมิน' }}
+        </span>
+      </div>
+      <div class="flex justify-between text-slate-300">
+        <span class="text-slate-400">ชำระโดย:</span>
+        <span class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 text-[11px] font-semibold border border-slate-700">
+          {{ (selectedBill && (selectedBill.paymentMethod || selectedBill.payment || selectedBill.PaymentMethod)) || (currentBillItems[0] && currentBillItems[0].PaymentMethod) || 'เงินสด' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- รายการสินค้า -->
+    <div class="space-y-2 max-h-[35vh] overflow-y-auto pr-1 text-xs">
+      <p class="text-xs font-semibold text-slate-400">รายการสินค้าที่ซื้อ</p>
+      
+      <div v-for="item in currentBillItems" :key="item.barcode || item.Barcode" class="flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+        <div>
+          <div class="font-bold text-white text-sm">{{ item.productName || item.ProductName || item.name }}</div>
+          <div class="text-slate-400">รหัส: {{ item.barcode || item.Barcode }} | ฿{{ item.price || item.Price }} x {{ item.qty || item.Qty }} ชิ้น</div>
+        </div>
+        <div class="font-bold text-emerald-400 text-sm">
+          ฿{{ item.total || item.Total || ((item.price || item.Price) * (item.qty || item.Qty)) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- สรุปยอดรวมทั้งสิ้น (คำนวณอัตโนมัติ) -->
+    <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+      <span class="font-bold text-slate-300 text-xs">ยอดรวมทั้งสิ้น:</span>
+      <span class="text-2xl font-black text-emerald-400">
+        ฿{{ (selectedBill && (selectedBill.totalAmount || selectedBill.TotalAmount || selectedBill['Total Amount'] || selectedBill.total || selectedBill.Total)) || currentBillItems.reduce((sum, item) => sum + Number(item.total || item.Total || ((item.price || item.Price || 0) * (item.qty || item.Qty || 1))), 0) }}
+      </span>
+    </div>
+
+    <!-- ปุ่มปิดหน้าต่าง -->
+    <button @click="showBillDetailModal = false" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition">
+      ปิดหน้าต่าง
+    </button>
+  </div>
+</div>
+
+ </div>
+
+</div>
+
+  <!-- ========================================== -->
+  <!-- ส่วนที่ 3: หน้าลูกค้า (พื้นหลังสำหรับคนสแกน QR) -->
+  <!-- ========================================== -->
+  <div v-else-if="currentUser && currentUser.role === 'customer'" class="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-4">
+      <h2 class="text-emerald-400 text-2xl font-bold mb-2">VEGA POS</h2>
+      <p class="text-slate-400 text-sm">ระบบแสดงใบเสร็จรับเงินออนไลน์</p>
+      <button @click="showReceiptModal = true" class="mt-6 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold rounded-xl border border-slate-700 transition">
+        ดูใบเสร็จอีกครั้ง
+      </button>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- ส่วนที่ 4: MODAL ป๊อปอัปทั้งหมดของระบบ -->
+  <!-- ========================================== -->
+
+  <!-- MODAL ปรับสต็อกด่วน -->
+  <div v-if="showAdjustModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/40 p-5 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-emerald-400 text-sm">📦 รับสินค้าเข้า / ปรับสต็อก</h3>
+        <button @click="showAdjustModal = false" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+      <p class="text-xs text-slate-300">
+        สินค้า: <span class="font-bold text-white">{{ adjustTargetProduct?.name }}</span>
+      </p>
+      <div class="space-y-1">
+        <label class="block text-xs text-slate-400">ระบุจำนวนที่รับเพิ่ม (เช่น 10, 50, 100):</label>
+        <input 
+          v-model.number="adjustInputAmount" 
+          type="number" 
+          class="w-full bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-center text-2xl font-extrabold text-emerald-400 outline-none"
+        />
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button @click="showAdjustModal = false" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-bold transition">ยกเลิก</button>
+        <button @click="confirmAdjustStock" class="w-2/3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg">บันทึกสต็อก</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL ป๊อปอัปรับเงิน (อัปเดตเพิ่มกล่องแสดงเลขบัญชีธนาคาร) -->
+<div v-if="showPaymentModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-700 p-5 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl">
+    
+    <!-- หัวข้อ -->
+    <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+      <h3 class="font-bold text-emerald-400 text-base">💳 เลือกช่องทางชำระเงิน</h3>
+      <button @click="showPaymentModal = false" class="text-slate-400 hover:text-white font-bold">✕</button>
+    </div>
+
+    <!-- ปุ่มเลือกวิธีชำระ -->
+    <div class="grid grid-cols-3 gap-2">
+      <button @click="setPaymentMethod('เงินสด')"
+        :class="paymentMethod === 'เงินสด' ? 'bg-emerald-600 text-white font-bold border-emerald-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'"
+        class="py-2 rounded-xl text-xs border transition flex flex-col items-center justify-center gap-1">
+        <span>💵</span> เงินสด
+      </button>
+      <button @click="setPaymentMethod('พร้อมเพย์')"
+        :class="paymentMethod === 'พร้อมเพย์' ? 'bg-emerald-600 text-white font-bold border-emerald-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'"
+        class="py-2 rounded-xl text-xs border transition flex flex-col items-center justify-center gap-1">
+        <span>📱</span> พร้อมเพย์
+      </button>
+      <button @click="setPaymentMethod('โอนเงิน')"
+        :class="paymentMethod === 'โอนเงิน' ? 'bg-emerald-600 text-white font-bold border-emerald-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'"
+        class="py-2 rounded-xl text-xs border transition flex flex-col items-center justify-center gap-1">
+        <span>🏦</span> โอนเงิน
+      </button>
+    </div>
+
+    <!-- ยอดเงินรวม -->
+    <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 text-center">
+      <span class="text-xs text-slate-400 block">ยอดสุทธิต้องชำระ</span>
+      <span class="text-3xl font-black text-emerald-400">฿{{ totalAmount }}</span>
+    </div>
+
+    <!-- กรณีเลือก เงินสด -->
+    <div v-if="paymentMethod === 'เงินสด'" class="space-y-3">
+      <div>
+        <label class="text-xs text-slate-400 block mb-1 font-semibold">จำนวนเงินที่รับมา (บาท):</label>
+        <input v-model.number="receivedAmount" type="number" class="w-full bg-slate-800 border border-slate-600 text-center text-2xl font-bold text-white py-2 rounded-xl outline-none focus:ring-2 ring-emerald-500">
+      </div>
+      <div class="grid grid-cols-4 gap-1.5 text-xs">
+        <button @click="setReceivedAmount(totalAmount)" class="bg-slate-800 hover:bg-slate-700 py-2 rounded-lg font-bold border border-slate-700 text-slate-300">พอดี</button>
+        <button @click="setReceivedAmount(100)" class="bg-slate-800 hover:bg-slate-700 py-2 rounded-lg font-bold border border-slate-700 text-slate-300">100</button>
+        <button @click="setReceivedAmount(500)" class="bg-slate-800 hover:bg-slate-700 py-2 rounded-lg font-bold border border-slate-700 text-slate-300">500</button>
+        <button @click="setReceivedAmount(1000)" class="bg-slate-800 hover:bg-slate-700 py-2 rounded-lg font-bold border border-slate-700 text-slate-300">1,000</button>
+      </div>
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+        <span class="text-xs font-bold text-slate-400">เงินทอน:</span>
+        <span class="text-xl font-extrabold" :class="receivedAmount >= totalAmount ? 'text-amber-400' : 'text-red-400'">
+          ฿{{ changeAmount }}
+        </span>
+      </div>
+    </div>
+
+    <!-- กรณีเลือก พร้อมเพย์ หรือ โอนเงิน -->
+    <div v-else class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center space-y-2">
+      <p class="text-xs text-slate-300">สแกน QR Code เพื่อชำระเงิน</p>
+      <div class="bg-white p-2 rounded-xl inline-block shadow-lg">
+        <img :src="'https://promptpay.io/0645315797/' + totalAmount" alt="QR Code" class="w-36 h-36 mx-auto">
+      </div>
+      <p class="text-[11px] text-amber-400 font-semibold">เมื่อลูกค้าโอนสำเร็จแล้ว ให้กดปุ่ม "ยืนยันรับเงิน"</p>
+
+      <!-- 🏦 กล่องแสดงข้อมูลบัญชีธนาคาร (เพิ่มเข้ามาใหม่ตรงนี้ครับ) -->
+      <div class="mt-3 p-3 bg-slate-900 border border-slate-800 rounded-xl text-center space-y-1">
+        <div class="text-amber-400 font-bold text-xs mb-1">🏦 ข้อมูลบัญชีสำหรับโอนเงิน</div>
+        <div class="text-slate-300 text-xs">ธนาคาร: <strong id="displayBankName" class="text-white">-</strong></div>
+        <div class="text-slate-300 text-xs">เลขบัญชี: <strong id="displayAccountNumber" class="text-emerald-400 text-sm tracking-wider font-mono">-</strong></div>
+        <div class="text-slate-300 text-xs">ชื่อบัญชี: <strong id="displayAccountName" class="text-white">-</strong></div>
+      </div>
+    </div>
+
+    <!-- ปุ่มกดยืนยัน / ยกเลิก ด้านล่าง -->
+    <div class="flex space-x-2 pt-2">
+      <button @click="showPaymentModal = false" class="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">ยกเลิก</button>
+      <button @click="confirmCheckout" :disabled="isProcessing || (paymentMethod === 'เงินสด' && receivedAmount < totalAmount)" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold rounded-xl transition">
+        <span v-if="!isProcessing">ยืนยันรับเงิน</span>
+        <span v-else>บันทึก...</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+  <!-- MODAL หน้าจอแสดงเงินทอนหลังขายสำเร็จ -->
+  <div v-if="saleSuccess" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/40 p-6 rounded-2xl max-w-sm w-full text-center space-y-5 shadow-2xl">
+      <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-3xl font-bold border border-emerald-500/30">✓</div>
+      <div>
+        <h3 class="text-xl font-bold text-white">ชำระเงินสำเร็จ!</h3>
+        <p class="text-xs text-slate-400 mt-1">บันทึกรายการขายเรียบร้อยแล้ว</p>
+      </div>
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2 text-sm">
+        <div class="flex justify-between text-slate-400">
+          <span>ช่องทางชำระเงิน:</span>
+          <span class="text-emerald-400 font-bold">{{ completedSaleInfo?.method }}</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>ยอดชำระสุทธิ:</span>
+          <span class="text-white font-bold">฿{{ completedSaleInfo?.total }}</span>
+        </div>
+        <div v-if="completedSaleInfo?.method === 'เงินสด'" class="flex justify-between text-slate-400">
+          <span>รับเงินมา:</span>
+          <span class="text-white font-bold">฿{{ completedSaleInfo?.received }}</span>
+        </div>
+        <div v-if="completedSaleInfo?.method === 'เงินสด'" class="flex justify-between text-lg font-black pt-2 border-t border-slate-700 text-amber-400">
+          <span>เงินทอน:</span>
+          <span>฿{{ completedSaleInfo?.change }}</span>
+        </div>
+      </div>
+      <button @click="startNewSale" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-base shadow-lg transition">
+        เริ่มการขายใหม่
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL เปิดกะเข้าใช้งาน -->
+  <div v-if="showOpenShiftModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/40 p-6 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl text-center">
+      <div class="text-4xl">🔓</div>
+      <div>
+        <h3 class="text-lg font-bold text-white">เปิดกะเข้าใช้งาน</h3>
+        <p class="text-xs text-slate-400 mt-1">ระบุจำนวนเงินสดตั้งต้นในเก๊ะ (เงินทอน)</p>
+      </div>
+      <div class="space-y-1">
+        <input v-model.number="startCashInput" type="number" min="0" placeholder="0.00" class="w-full text-center text-2xl font-bold bg-slate-800 border border-slate-700 py-2.5 rounded-xl text-emerald-400 outline-none focus:ring-2 ring-emerald-500">
+      </div>
+      <button @click="confirmOpenShift" :disabled="isShiftProcessing" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-lg">
+        <span v-if="!isShiftProcessing">ยืนยันเปิดกะ</span>
+        <span v-else>กำลังบันทึก...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL ปิดกะการทำงาน -->
+  <div v-if="showCloseShiftModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
+      <div class="text-center">
+        <div class="text-4xl mb-1">🔒</div>
+        <h3 class="text-lg font-bold text-white">ปิดกะการทำงาน</h3>
+        <p class="text-xs text-slate-400">สรุปยอดขายประจำกะและนับเงินสดส่งมอบ</p>
+      </div>
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2 text-sm">
+        <div class="flex justify-between text-slate-400">
+          <span>เวลาเปิดกะ:</span>
+          <span class="text-white font-medium">{{ activeShift?.openTime }}</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>เงินสดตั้งต้น:</span>
+          <span class="text-white font-medium">฿{{ activeShift?.startCash }}</span>
+        </div>
+        <div class="flex justify-between text-slate-400">
+          <span>ยอดขายเงินสด:</span>
+          <span class="text-emerald-400 font-medium">+฿{{ shiftSummary?.cashSales }}</span>
+        </div>
+        <div class="flex justify-between text-cyan-400">
+          <span>+ เงินนำเข้า (Paid In):</span>
+          <span>+{{ shiftSummary.cashIn || 0 }} ฿</span>
+        </div>
+        <div class="flex justify-between text-rose-400">
+          <span>- เงินถอนออก (Paid Out):</span>
+          <span>-{{ shiftSummary.cashOut || 0 }} ฿</span>
+        </div>
+        <div class="flex justify-between text-slate-400 border-t border-slate-700/60 pt-2">
+          <span>ยอดขายพร้อมเพย์/โอน:</span>
+          <span class="text-sky-400 font-medium">+฿{{ shiftSummary?.transferSales }}</span>
+        </div>
+        <div class="flex justify-between text-slate-300 font-bold border-t border-slate-700 pt-2 text-base">
+          <span>รวมยอดขายทั้งหมด:</span>
+          <span class="text-white">฿{{ shiftSummary?.totalSales }}</span>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <label class="block text-xs text-slate-400 font-medium">จำนวนเงินสดที่นับได้จริงในเก๊ะ:</label>
+        <input v-model.number="actualCashInput" type="number" min="0" placeholder="0.00" class="w-full text-center text-xl font-bold bg-slate-800 border border-slate-700 py-2.5 rounded-xl text-amber-400 outline-none focus:ring-2 ring-amber-500">
+      </div>
+      <div v-if="shiftDiff !== undefined && shiftDiff !== null" class="flex justify-between items-center bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-sm">
+        <span class="text-slate-400">ผลต่างเงินสด (เกิน/ขาด):</span>
+        <span class="font-extrabold" :class="shiftDiff >= 0 ? 'text-emerald-400' : 'text-red-400'">
+          {{ shiftDiff >= 0 ? '+฿' + shiftDiff : '-฿' + Math.abs(shiftDiff) }}
+        </span>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button @click="showCloseShiftModal = false" class="w-1/3 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">ยกเลิก</button>
+        <button @click="confirmCloseShift" :disabled="isShiftProcessing" class="w-2/3 py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-lg">
+          <span v-if="!isShiftProcessing">ยืนยันปิดกะและออกจากระบบ</span>
+          <span v-else>กำลังปิดกะ...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL เพิ่ม/แก้ไขสินค้า -->
+  <div v-if="showProductModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-purple-500/40 p-5 rounded-2xl max-w-md w-full space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-purple-400 text-base">{{ isEditing ? '✏️ แก้ไขข้อมูลสินค้า' : '➕ เพิ่มสินค้าใหม่' }}</h3>
+        <button @click="showProductModal = false" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">รหัสบาร์โค้ด</label>
+          <input v-model="formProduct.barcode" :disabled="isEditing" type="text" placeholder="ระบุบาร์โค้ด" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500 disabled:opacity-50">
+   				<p v-if="barcodeAlreadyExists" class="text-rose-400 text-[11px] mt-1">
+			  ⚠️ รหัสนี้มีสินค้าอยู่แล้ว กรุณาใช้รหัสอื่น
+				</p>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">ชื่อสินค้า</label>
+          <input v-model="formProduct.name" type="text" placeholder="ระบุชื่อสินค้า" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">หมวดหมู่</label>
+          <input v-model="formProduct.category" type="text" placeholder="หมวดหมู่" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-400 mb-1">ราคาทุน (บาท)</label>
+            <input v-model.number="formProduct.cost" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">ราคาขาย (บาท)</label>
+            <input v-model.number="formProduct.price" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-400 mb-1">จำนวนในสต็อก</label>
+            <input v-model.number="formProduct.stock" type="number" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">สต็อกขั้นต่ำ (เตือนใกล้หมด)</label>
+            <input v-model.number="formProduct.minStock" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-purple-500">
+          </div>
+        </div>
+      </div>
+      <div class="flex space-x-2 pt-2">
+        <button @click="showProductModal = false" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition text-xs">ยกเลิก</button>
+        <button @click="saveProduct" :disabled="isSavingProduct || !formProduct.barcode || !formProduct.name" class="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-bold rounded-xl transition text-xs">
+          <span v-if="!isSavingProduct">บันทึกข้อมูล</span>
+          <span v-else>กำลังบันทึก...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL บันทึกเงินเข้า / เงินออก -->
+  <div v-if="showCashMovementModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 p-5 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-amber-400 text-sm flex items-center gap-1.5">
+          <span>💸</span> บันทึกเงินเข้า / เงินออก
+        </h3>
+        <button @click="showCashMovementModal = false" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+      <div class="grid grid-cols-2 gap-2 p-1 bg-slate-800 rounded-xl border border-slate-700">
+        <button type="button" @click="changeCashType('Paid Out')" :class="cashForm.type === 'Paid Out' ? 'bg-rose-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-200'" class="py-2 text-xs rounded-lg transition">🔴 นำเงินออก (Paid Out)</button>
+        <button type="button" @click="changeCashType('Paid In')" :class="cashForm.type === 'Paid In' ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-200'" class="py-2 text-xs rounded-lg transition">🟢 นำเงินเข้า (Paid In)</button>
+      </div>
+      <div class="space-y-1 text-xs">
+        <label class="block text-slate-400 font-medium">จำนวนเงิน (บาท) <span class="text-rose-400">*</span></label>
+        <input type="number" v-model.number="cashForm.amount" min="1" placeholder="0.00" class="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-xl px-3 py-2 text-right font-mono text-base text-white outline-none"/>
+      </div>
+      <div class="space-y-1 text-xs">
+        <label class="block text-slate-400 font-medium">เหตุผลหลัก <span class="text-rose-400">*</span></label>
+        <select v-model="cashForm.reason" class="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none">
+          <option v-for="opt in (cashForm.type === 'Paid Out' ? paidOutReasons : paidInReasons)" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+      </div>
+      <div class="space-y-1 text-xs">
+        <label class="block text-slate-400 font-medium">รายละเอียดเพิ่มเติม</label>
+        <input type="text" v-model="cashForm.detail" placeholder="เช่น ซื้อน้ำแข็ง 2 ถุง..." class="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none"/>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button @click="showCashMovementModal = false" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-bold transition">ยกเลิก</button>
+        <button @click="submitCashMovement" :disabled="cashMovementLoading" class="w-2/3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg flex items-center justify-center gap-1">
+          <span v-if="cashMovementLoading">⏳</span>
+          <span>{{ cashMovementLoading ? 'กำลังบันทึก...' : 'บันทึกรายการ' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+ <!-- MODAL ใบเสร็จดิจิทัล (เวอร์ชันย่อสเกล พอดีจอ Sunmi) -->
+<div v-if="showReceiptModal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 z-50">
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-[320px] w-full p-4 text-center shadow-2xl text-white relative space-y-2 max-h-[92vh] overflow-y-auto">
+    
+    <!-- โลโก้ และ ข้อมูลร้านค้า -->
+    <div class="flex flex-col items-center justify-center space-y-0.5">
+      <img v-if="storeConfig && storeConfig.logoUrl" :src="storeConfig.logoUrl" class="w-10 h-10 rounded-xl object-cover border border-emerald-500/30 p-0.5 bg-slate-800 mb-0.5 shadow-md">
+      <h2 class="text-base font-black text-emerald-400 tracking-wide">{{ (storeConfig && storeConfig.name) || 'VEGA POS' }}</h2>
+      <p v-if="storeConfig && storeConfig.address" class="text-[10px] text-slate-400 leading-tight px-1">{{ storeConfig.address }}</p>
+      <div class="flex flex-wrap justify-center gap-x-2 text-[10px] text-slate-400 mt-0.5 font-medium">
+        <span v-if="storeConfig && storeConfig.phone">📞 {{ storeConfig.phone }}</span>
+        <span v-if="storeConfig && storeConfig.socialLine">💬 {{ storeConfig.socialLine }}</span>
+      </div>
+      <p v-if="storeConfig && storeConfig.taxId" class="text-[9px] text-slate-500">เลขผู้เสียภาษี: {{ storeConfig.taxId }}</p>
+    </div>
+
+    <div class="border-b border-dashed border-slate-700/80 my-1.5"></div>
+
+    <!-- เลขที่บิล และ วันที่ -->
+    <div class="flex justify-between items-center text-[11px] text-slate-400 px-1">
+      <span>เลขที่ใบเสร็จ: <strong class="text-emerald-400">{{ lastTxId }}</strong></span>
+      <span>{{ new Date().toLocaleDateString('th-TH') }}</span>
+    </div>
+
+    <!-- ยอดชำระเงินสด -->
+    <div v-if="lastPaymentMethod === 'เงินสด'" class="bg-slate-800/80 rounded-xl p-2 text-left border border-slate-700/50 space-y-0.5 my-1.5 text-[11px]">
+      <div class="flex justify-between text-slate-400">
+        <span>ยอดรวมทั้งสิ้น:</span>
+        <span class="text-white font-semibold">฿{{ (lastTotalAmount || 0).toLocaleString() }}</span>
+      </div>
+      <div class="flex justify-between text-slate-400">
+        <span>รับเงินสดมา:</span>
+        <span class="text-white font-semibold">฿{{ (receivedCash || 0).toLocaleString() }}</span>
+      </div>
+      <div class="flex justify-between text-xs font-bold border-t border-slate-700/80 pt-1 mt-1 text-emerald-400">
+        <span>เงินทอน:</span>
+        <span>฿{{ ((receivedCash || 0) - (lastTotalAmount || 0)).toLocaleString() }}</span>
+      </div>
+    </div>
+
+    <!-- QR Code (ปรับย่อขนาดให้สมส่วนพอดี) -->
+    <div class="bg-white p-2 rounded-xl inline-block mx-auto my-1 shadow-inner">
+      <div id="qrcode" class="flex justify-center [&>img]:w-32 [&>img]:h-32 [&>img]:object-contain"></div>
+    </div>
+
+    <!-- หมายเหตุท้ายบิล -->
+    <div v-if="storeConfig && storeConfig.footerNote" class="bg-slate-800/50 p-2 rounded-lg border border-slate-800 text-[10px] text-amber-300/90 leading-tight">
+      {{ storeConfig.footerNote }}
+    </div>
+
+    <!-- ปุ่มกดจบการขาย -->
+    <p class="text-[9px] text-slate-600 my-0.5">ระบบพัฒนาโดย ร้าน Case_Phone. ร่วมกับ Claude</p>
+    <button @click="closeReceiptModal" class="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md active:scale-95">
+      เสร็จสิ้น / บิลถัดไป
+    </button>
+
+  </div>
+</div>
+
+  <!-- MODAL ป๊อปอัปตั้งค่าข้อมูลร้านค้า -->
+  <div v-if="currentUser && showStoreSettingsModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 p-5 rounded-2xl max-w-md w-full space-y-4 shadow-2xl text-white">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-emerald-400 text-base flex items-center gap-2"><span>⚙️</span> ตั้งค่าข้อมูลร้านค้า</h3>
+        <button @click="showStoreSettingsModal = false" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">ชื่อร้านค้า</label>
+          <input v-model="storeConfig.name" type="text" placeholder="เช่น VEGA POS Store" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">โลโก้ร้าน (เลือกรูปภาพจากเครื่อง)</label>
+          <input
+            type="file"
+            accept="image/*"
+            @change="handleLogoUpload"
+            class="w-full bg-slate-800 border border-slate-700 p-2 rounded-xl text-white text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+          <div v-if="storeConfig.logoUrl" class="mt-2 flex items-center gap-2 bg-slate-800/50 p-2 rounded-lg border border-slate-800">
+            <img :src="storeConfig.logoUrl" class="w-8 h-8 object-contain rounded bg-white">
+            <span class="text-slate-400 text-[10px] flex-1">โลโก้ที่เลือกไว้พร้อมบันทึก</span>
+            <button type="button" @click="storeConfig.logoUrl = ''" class="text-rose-400 text-[10px] font-bold hover:text-rose-300">ลบรูป</button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">ที่อยู่ร้านค้า</label>
+          <textarea v-model="storeConfig.address" rows="2" placeholder="ระบุที่อยู่ร้าน..." class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-emerald-500 resize-none"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-400 mb-1">เบอร์โทรศัพท์</label>
+            <input v-model="storeConfig.phone" type="text" placeholder="08X-XXX-XXXX" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-emerald-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">LINE / ID</label>
+            <input v-model="storeConfig.socialLine" type="text" placeholder="@yourstore" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-emerald-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">เลขประจำตัวผู้เสียภาษี (ถ้ามี)</label>
+          <input v-model="storeConfig.taxId" type="text" placeholder="เลขผู้เสียภาษี 13 หลัก" class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">ข้อความขอบคุณท้ายใบเสร็จ</label>
+          <input v-model="storeConfig.footerNote" type="text" placeholder="ขอบคุณที่อุดหนุน..." class="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-white outline-none focus:ring-1 ring-emerald-500">
+        </div>
+      </div>
+      <div class="flex space-x-2 pt-2">
+        <button @click="showStoreSettingsModal = false" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition text-xs">ยกเลิก</button>
+        <button @click="saveStoreConfig()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition text-xs shadow-lg">บันทึกข้อมูลร้านค้า</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ✅ ค่านี้ได้รับมาจาก server (doGet ใน Code.gs ที่ tpl.customerSheetId = customerInfo.sheetId)
+// เก็บไว้เป็นตัวแปร global เพื่อให้ทั้ง Vue methods และฟังก์ชันธรรมดานอก Vue เรียกใช้ได้ตรงกัน
+const CUSTOMER_SHEET_ID = "<?= customerSheetId ?>";
+const WEB_APP_URL = "<?= webAppUrl ?>";
+
+const { createApp } = Vue;
+createApp({
+  data() {
+    return {
+      customerSheetId: CUSTOMER_SHEET_ID, // ✅ เก็บไว้ใน Vue data ด้วย เผื่อ methods ต้องใช้ this.customerSheetId
+      inputPin: '',
+      adminTab: 'stock',
+      currentUser: null,
+      currentView: 'pos',
+      isLoggingIn: false,
+      loginError: '',
+      products: [],
+      cart: [],
+      discount: 0,
+      discountType: 'baht',
+      searchQuery: '',
+      selectedCategory: 'ทั้งหมด',
+      adminSelectedCategory: 'ทั้งหมด',
+      loading: false,
+      isProcessing: false,
+      showPaymentModal: false,
+      paymentMethod: 'เงินสด',
+      receivedAmount: 0,
+      saleSuccess: false,
+      completedSaleInfo: null,
+      showProductModal: false,
+      showAdjustModal: false,
+      isOutOfStockOnly: false,
+      adjustTargetProduct: null,
+      adjustInputAmount: 10,
+      activeShift: null,
+      showOpenShiftModal: false,
+      startCashInput: 0,
+      showCloseShiftModal: false,
+      shiftSummary: { cashSales: 0, transferSales: 0, totalSales: 0, cashIn: 0, cashOut: 0 },
+      actualCashInput: 0,
+      isShiftProcessing: false,
+      isEditing: false,
+      isSavingProduct: false,
+      formProduct: { barcode: '', name: '', category: 'ทั่วไป', cost: 0, price: 0, stock: 0, minStock: 5 },
+      showCashMovementModal: false,
+      cashMovementLoading: false,
+      cashForm: { type: 'Paid Out', amount: '', reason: 'ซื้อวัตถุดิบ/ของสด', detail: '' },
+      paidOutReasons: ['ซื้อวัตถุดิบ/ของสด', 'ซื้อน้ำแข็ง/ค่าน้ำ', 'เติมเงินทอน', 'เบิกค่าใช้จ่ายด่วน', 'นำเงินเก็บเข้าเซฟ', 'อื่นๆ'],
+      paidInReasons: ['เติมเงินทอน', 'นำเงินเข้าเก๊ะ', 'รับคืนเงินทดรอง', 'อื่นๆ'],
+      drawerPort: null,
+      showReceiptModal: false,
+      lastTxId: '',
+      lastTotalAmount: 0,
+      lastPaymentMethod: '',
+      receivedCash: 0,
+      showStoreSettingsModal: false,
+      storeConfig: {
+        name: 'VEGA POS',
+        logoUrl: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+        address: '123/45 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110',
+        phone: '081-234-5678',
+        taxId: '0105560000000',
+        socialLine: '@vegapos',
+        footerNote: 'ขอบคุณที่อุดหนุนสินค้ากับเรา! ❤️ สินค้าซื้อแล้วไม่รับเปลี่ยนหรือคืนเงิน'
+      },
+      // 👇 เติมตัวแปรสำหรับประวัติการขายและกะการทำงาน (แก้หน้าจอดำ)
+      salesHistory: [],
+      shiftHistory: [],
+      cashMovements: [],
+      currentBillItems: [],
+      showBillDetailModal: false,
+      selectedBill: null,
+      historySubTab: 'sales',
+      historyDatePreset: 'today',
+      historyStartDate: '',
+      historyEndDate: ''
+    };
+  },
+  watch: {
+    adminTab(newTab) {
+      if (newTab === 'dashboard') {
+        this.$nextTick(() => {
+          if (typeof onPresetDateChange === 'function') {
+            onPresetDateChange('today');
+          }
+        });
+      }
+    }
+  },
+  computed: {
+    categories() {
+      const cats = this.products.map(p => p.category).filter(Boolean);
+      return ['ทั้งหมด', ...new Set(cats)];
+    },
+    filteredProducts() {
+      return this.products.filter(p => {
+        const q = (this.searchQuery || '').toLowerCase();
+        const matchSearch = !q || p.name.toLowerCase().includes(q) || String(p.barcode).includes(q);
+        const matchCategory = this.selectedCategory === 'ทั้งหมด' || p.category === this.selectedCategory;
+        return matchSearch && matchCategory;
+      });
+    },
+    adminFilteredProducts() {
+      let list = this.products.filter(p => {
+        const q = (this.searchQuery || '').toLowerCase();
+        const matchSearch = !q || p.name.toLowerCase().includes(q) || String(p.barcode).includes(q);
+        const matchCategory = this.adminSelectedCategory === 'ทั้งหมด' || p.category === this.adminSelectedCategory;
+        return matchSearch && matchCategory;
+      });
+      if (this.isOutOfStockOnly) {
+        return list.slice().sort((a, b) => {
+          const aOutOfStock = Number(a.stock) <= 0;
+          const bOutOfStock = Number(b.stock) <= 0;
+          if (aOutOfStock && !bOutOfStock) return -1;
+          if (!aOutOfStock && bOutOfStock) return 1;
+          return Number(a.stock) - Number(b.stock);
+        });
+      }
+      return list;
+    },
+    subtotal() {
+      return this.cart.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    },
+		barcodeAlreadyExists() {
+	  if (this.isEditing || !this.formProduct.barcode) return false;
+	  return this.products.some(p => String(p.barcode) === String(this.formProduct.barcode));
+		},
+    calculatedDiscount() {
+      const val = Number(this.discount) || 0;
+      return this.discountType === 'percent' ? Math.round(this.subtotal * (val / 100)) : val;
+    },
+    totalAmount() {
+      const net = this.subtotal - this.calculatedDiscount;
+      return net > 0 ? net : 0;
+    },
+    changeAmount() {
+      const change = (Number(this.receivedAmount) || 0) - this.totalAmount;
+      return change > 0 ? change : 0;
+    },
+    shiftDiff() {
+      const cashIn = Number(this.shiftSummary?.cashIn) || 0;
+      const cashOut = Number(this.shiftSummary?.cashOut) || 0;
+      const expected = (Number(this.activeShift?.startCash) || 0) + (Number(this.shiftSummary?.cashSales) || 0) + cashIn - cashOut;
+      return (Number(this.actualCashInput) || 0) - expected;
+    },
+    // 👇 เติมฟังก์ชันส่งข้อมูลให้หน้าจอ (แก้หน้าจอดำเวลาดึงข้อมูล)
+    filteredShiftHistory() {
+      return this.shiftHistory || [];
+    },
+    filteredCashMovements() {
+      return this.cashMovements || [];
+    },
+    filteredSalesHistory() {
+      return this.salesHistory || [];
+    }
+  },
+  methods: {
+    async connectDrawer() {
+      if ('serial' in navigator) {
+        try {
+          this.drawerPort = await navigator.serial.requestPort();
+          await this.drawerPort.open({ baudRate: 9600 });
+          alert('เชื่อมต่อลิ้นชักเก็บเงินเรียบร้อยแล้ว!');
+        } catch (err) {
+          console.error('ยกเลิกหรือเชื่อมต่อไม่สำเร็จ:', err);
+        }
+      } else {
+        alert('เบราว์เซอร์นี้ไม่รองรับ Web Serial API (แนะนำให้ใช้ Google Chrome)');
+      }
+    },
+		// วางเพิ่มใน methods: { ... } ของ Vue
+		openPaymentSettingsModal() {
+		  const modal = document.getElementById('paymentSettingsModal');
+		  if (modal) {
+		    modal.style.display = 'flex';
+		    if (typeof loadPaymentSettings === 'function') {
+		      loadPaymentSettings(); // เรียกฟังก์ชันดึงข้อมูลเดิมมาแสดง
+		    }
+		  }
+		},
+    async openCashDrawer() {
+      if (this.drawerPort && this.drawerPort.writable) {
+        try {
+          const writer = this.drawerPort.writable.getWriter();
+          const command = new Uint8Array([27, 112, 0, 25, 250]);
+          await writer.write(command);
+          writer.releaseLock();
+        } catch (err) {
+          console.error('ไม่สามารถสั่งเตะลิ้นชักได้:', err);
+        }
+      }
+    },
+    generateReceiptQR(txId) {
+  this.$nextTick(() => {
+    const qrContainer = document.getElementById('qrcode');
+    if (qrContainer) {
+      qrContainer.innerHTML = '';
+      const webAppUrl = WEB_APP_URL; // ← เปลี่ยนจากลิงก์ hardcode เป็นตัวแปร dynamic
+      const receiptUrl = `${webAppUrl}?page=receipt&receiptId=${txId}&txId=${txId}&sheetId=${this.customerSheetId}`;
+      new QRCode(qrContainer, {
+        text: receiptUrl,
+        width: 180,
+        height: 180,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  });
+},
+    closeReceiptModal() {
+      this.showReceiptModal = false;
+      this.receivedCash = 0;
+    },
+    // ✅ แก้ชื่อจาก SaveStoreConfig -> saveStoreConfig (ตรงกับที่ template เรียก @click="saveStoreConfig()")
+    saveStoreConfig() {
+      const customerSheetId = this.customerSheetId;
+      localStorage.setItem('vega_store_config', JSON.stringify(this.storeConfig));
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && res.success) {
+              alert('บันทึกข้อมูลร้านค้าลงระบบเรียบร้อยแล้ว!');
+            } else {
+              alert('เกิดข้อผิดพลาดในการบันทึกลง Google Sheets');
+            }
+          })
+          .saveStoreConfig(customerSheetId, this.storeConfig);
+      } else {
+        alert('บันทึกข้อมูลเรียบร้อย (โหมดทดสอบ)');
+      }
+      this.showStoreSettingsModal = false;
+    },
+    handleLogoUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxWidth = 120;
+          const scale = img.width > maxWidth ? (maxWidth / img.width) : 1;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+          if (dataUrl.length > 45000) {
+            alert('รูปภาพมีขนาดใหญ่เกินไป กรุณาเลือกรูปอื่นที่มีรายละเอียดน้อยกว่านี้ หรือรูปที่มีขนาดไฟล์เล็กกว่านี้');
+            return;
+          }
+
+          this.storeConfig.logoUrl = dataUrl;
+        };
+        img.onerror = () => {
+          alert('ไม่สามารถอ่านไฟล์รูปภาพนี้ได้ กรุณาลองไฟล์อื่น');
+        };
+        img.src = readerEvent.target.result;
+      };
+      reader.onerror = () => {
+        alert('เกิดข้อผิดพลาดขณะอ่านไฟล์ กรุณาลองใหม่อีกครั้ง');
+      };
+      reader.readAsDataURL(file);
+    },
+    // ✅ แก้ชื่อจาก LoadStoreConfig -> loadStoreConfig (ตรงกับที่ mounted() เรียก this.loadStoreConfig())
+    loadStoreConfig() {
+      const customerSheetId = this.customerSheetId;
+      this.showStoreSettingsModal = false;
+      const savedConfig = localStorage.getItem('vega_store_config');
+      if (savedConfig) {
+        try {
+          this.storeConfig = JSON.parse(savedConfig);
+        } catch (e) {
+          console.error("Error loading store config:", e);
+        }
+      }
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(config => {
+            if (config) {
+              this.storeConfig = config;
+              localStorage.setItem('vega_store_config', JSON.stringify(config));
+            }
+          })
+          .getStoreConfig(customerSheetId);
+      }
+    },
+    setPaymentMethod(method) {
+      this.paymentMethod = method;
+      
+      // [ของเดิม] ถ้าไม่ใช่เงินสด ให้ตั้งค่ายอดเงินที่รับมา = ยอดสุทธิ
+      if (method !== 'เงินสด') {
+        this.receivedAmount = this.totalAmount;
+        
+        // [ของใหม่] สั่งดึงข้อมูลเลขบัญชีธนาคารมาแสดงทันที
+        if (typeof updateBankDetailsDisplay === 'function') {
+          updateBankDetailsDisplay();
+        }
+      }
+    },
+    openPaymentModal() {
+      if (this.cart.length === 0) return;
+      this.paymentMethod = 'เงินสด';
+      this.receivedAmount = this.totalAmount;
+      this.showPaymentModal = true;
+    },
+    setReceivedAmount(amt) {
+      this.receivedAmount = amt;
+    },
+    // ✅ แก้ชื่อจาก ConfirmCheckout -> confirmCheckout (ตรงกับที่ template เรียก @click="confirmCheckout")
+    confirmCheckout() {
+      const customerSheetId = this.customerSheetId;
+      if (this.paymentMethod === 'เงินสด' && this.receivedAmount < this.totalAmount) {
+        alert("จำนวนเงินที่รับมาน้อยกว่ายอดสุทธิครับ");
+        return;
+      }
+      this.isProcessing = true;
+      const saleData = {
+        staffName: this.currentUser ? this.currentUser.name : 'พนักงาน',
+        paymentMethod: this.paymentMethod,
+        discount: this.calculatedDiscount,
+        totalAmount: this.totalAmount,
+        cart: this.cart
+      };
+      const saleSummary = {
+        total: this.totalAmount,
+        received: Number(this.receivedAmount),
+        change: this.changeAmount,
+        method: this.paymentMethod
+      };
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isProcessing = false;
+          if (res.success) {
+            this.showPaymentModal = false;
+            this.completedSaleInfo = saleSummary;
+            this.saleSuccess = true;
+            this.fetchProducts();
+            if (this.paymentMethod === 'เงินสด') {
+              this.receivedCash = Number(this.receivedAmount);
+              this.openCashDrawer();
+            }
+            this.lastTxId = res.txId || ('TX-' + Date.now());
+            this.lastTotalAmount = this.totalAmount;
+            this.lastPaymentMethod = this.paymentMethod;
+            this.showReceiptModal = true;
+            this.generateReceiptQR(this.lastTxId);
+            this.cart = [];
+          } else {
+            alert("เกิดข้อผิดพลาด: " + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          this.isProcessing = false;
+          alert("เกิดข้อผิดพลาดจากระบบ: " + err.message);
+        })
+        .processSale(customerSheetId, saleData);
+    },
+    startNewSale() {
+      this.cart = [];
+      this.discount = 0;
+      this.receivedAmount = 0;
+      this.saleSuccess = false;
+      this.completedSaleInfo = null;
+    },
+    // ✅ แก้ชื่อจาก Login -> login (ตรงกับที่ template เรียก @click="login" และ @keyup.enter="login")
+    login() {
+      const customerSheetId = this.customerSheetId;
+      if (!this.inputPin) return;
+      this.isLoggingIn = true;
+      this.loginError = '';
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isLoggingIn = false;
+          if (res.success) {
+            this.currentUser = res.user;
+            this.inputPin = '';
+            this.currentView = 'pos';
+            this.fetchProducts();
+            this.checkShiftStatus();
+          } else {
+            this.loginError = res.message;
+          }
+        })
+        .withFailureHandler(err => {
+          this.isLoggingIn = false;
+          this.loginError = "เกิดข้อผิดพลาดจากระบบ: " + err.message;
+        })
+        .checkLogin(customerSheetId, this.inputPin);
+    },
+    logout() {
+      this.currentUser = null;
+      this.inputPin = '';
+      this.cart = [];
+    },
+    // ✅ แก้ชื่อจาก FetchProducts -> fetchProducts (ตรงกับที่เรียกใน login() และที่อื่นๆ)
+    fetchProducts() {
+      const customerSheetId = this.customerSheetId;
+      this.loading = true;
+      google.script.run
+        .withSuccessHandler(data => {
+          this.products = data || [];
+          this.loading = false;
+        })
+        .withFailureHandler(err => {
+          this.loading = false;
+          alert("ดึงข้อมูลสินค้าไม่สำเร็จ: " + err.message);
+        })
+        .getProducts(customerSheetId);
+    },
+    addToCart(p) {
+      const exist = this.cart.find(item => item.barcode === p.barcode);
+      if (exist) {
+        exist.qty++;
+      } else {
+        this.cart.push({ barcode: p.barcode, name: p.name, price: p.price, qty: 1, stock: p.stock });
+      }
+    },
+    updateQty(item, change) {
+      item.qty += change;
+      if (item.qty <= 0) {
+        this.cart = this.cart.filter(i => i.barcode !== item.barcode);
+      }
+    },
+    openProductModal(p = null) {
+      this.isSavingProduct = false;
+      if (p) {
+        this.isEditing = true;
+        this.formProduct = JSON.parse(JSON.stringify(p));
+      } else {
+        this.isEditing = false;
+        this.formProduct = { barcode: '', name: '', category: 'ทั่วไป', cost: 0, price: 0, stock: 0, minStock: 5 };
+      }
+      this.showProductModal = true;
+    },
+    // ✅ แก้ชื่อจาก SaveProduct -> saveProduct (ตรงกับที่ template เรียก @click="saveProduct")
+    saveProduct() {
+      const customerSheetId = this.customerSheetId;
+      if (!this.formProduct.barcode || !this.formProduct.name) return;
+      this.isSavingProduct = true;
+      const payload = { ...this.formProduct, isEditing: this.isEditing };
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isSavingProduct = false;
+          if (res.success) {
+            this.showProductModal = false;
+            this.fetchProducts();
+            alert("บันทึกข้อมูลสินค้าเรียบร้อยแล้ว!");
+          } else {
+            alert("เกิดข้อผิดพลาด: " + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          this.isSavingProduct = false;
+          alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
+        })
+        .saveProduct(customerSheetId, payload);
+    },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (ใช้ this.customerSheetId แทน)
+    // เดิมรับ (customerSheetId, barcode, changeAmount) แต่ template ส่งมาแค่ 2 ค่า ทำให้ค่าเลื่อนตำแหน่งผิดหมด
+    quickAdjustStock(barcode, changeAmount) {
+      const customerSheetId = this.customerSheetId;
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res.success) {
+            const p = this.products.find(item => item.barcode === barcode);
+            if (p) p.stock = res.newStock;
+          } else {
+            alert("เกิดข้อผิดพลาด: " + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          alert("เกิดข้อผิดพลาดจาก Server: " + err.message);
+        })
+        .adjustStock(customerSheetId, barcode, changeAmount);
+    },
+    openAdjustModal(p) {
+      this.adjustTargetProduct = p;
+      this.adjustInputAmount = 10;
+      this.showAdjustModal = true;
+    },
+    confirmAdjustStock() {
+      if (!this.adjustTargetProduct) return;
+      const amt = Number(this.adjustInputAmount);
+      if (isNaN(amt) || amt === 0) {
+        alert("กรุณากรอกตัวเลขจำนวนที่ถูกต้อง");
+        return;
+      }
+      this.quickAdjustStock(this.adjustTargetProduct.barcode, amt);
+      this.showAdjustModal = false;
+    },
+    // ✅ แก้ชื่อจาก CheckShiftStatus -> checkShiftStatus (ตรงกับที่เรียกใน login())
+    checkShiftStatus() {
+      const customerSheetId = this.customerSheetId;
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res.success) {
+            if (res.activeShift) {
+              this.activeShift = res.activeShift;
+            } else {
+              this.startCashInput = 0;
+              this.showOpenShiftModal = true;
+            }
+          }
+        })
+        .withFailureHandler(err => {
+          alert("ตรวจสอบสถานะกะไม่สำเร็จ: " + err.message);
+        })
+        .getActiveShift(customerSheetId, this.currentUser.name);
+    },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (template เรียก @click="confirmOpenShift" ไม่ส่ง arg ใดๆ)
+    confirmOpenShift() {
+      const customerSheetId = this.customerSheetId;
+      const staffName = this.currentUser ? this.currentUser.name : 'พนักงาน';
+      this.isShiftProcessing = true;
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isShiftProcessing = false;
+          if (res && res.success) {
+            this.activeShift = res.shift || res.activeShift;
+            this.showOpenShiftModal = false;
+            alert("🟢 เปิดกะสำเร็จเรียบร้อยครับ!");
+          } else {
+            alert("เปิดกะไม่สำเร็จ: " + (res ? res.message : 'เกิดข้อผิดพลาด'));
+          }
+        })
+        .withFailureHandler(err => {
+          this.isShiftProcessing = false;
+          alert("เกิดข้อผิดพลาดขณะเปิดกะ: " + err.message);
+        })
+        .openShift(customerSheetId, staffName, this.startCashInput);
+    },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (template เรียก @click="openCloseShiftModal" ไม่ส่ง arg ใดๆ)
+    openCloseShiftModal() {
+      const customerSheetId = this.customerSheetId;
+      if (!this.activeShift) return;
+      this.isShiftProcessing = true;
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isShiftProcessing = false;
+          if (res.success) {
+            this.shiftSummary = res.summary;
+            const cashSales = Number(res.summary.cashSales) || 0;
+            const transferSales = Number(res.summary.transferSales) || 0;
+            this.shiftSummary.totalSales = cashSales + transferSales;
+            const start = Number(this.activeShift.startCash) || 0;
+            const cashIn = Number(res.summary.cashIn) || 0;
+            const cashOut = Number(res.summary.cashOut) || 0;
+            this.actualCashInput = start + cashSales + cashIn - cashOut;
+            this.showCloseShiftModal = true;
+          } else {
+            alert("ดึงข้อมูลกะไม่สำเร็จ: " + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          this.isShiftProcessing = false;
+          alert("เกิดข้อผิดพลาดในการดึงข้อมูลกะ: " + err.message);
+        })
+        .getShiftSummary(customerSheetId, this.currentUser.name, this.activeShift.openTime, this.activeShift.shiftId);
+    },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (template เรียก @click="confirmCloseShift" ไม่ส่ง arg ใดๆ)
+    confirmCloseShift() {
+      const customerSheetId = this.customerSheetId;
+      this.isShiftProcessing = true;
+      const payload = {
+        shiftId: this.activeShift.shiftId,
+        cashSales: this.shiftSummary.cashSales,
+        transferSales: this.shiftSummary.transferSales,
+        cashIn: this.shiftSummary.cashIn || 0,
+        cashOut: this.shiftSummary.cashOut || 0,
+        actualCash: this.actualCashInput
+      };
+      google.script.run
+        .withSuccessHandler(res => {
+          this.isShiftProcessing = false;
+          if (res.success) {
+            this.openCashDrawer();
+            alert("ปิดกะเรียบร้อยแล้ว!");
+            this.showCloseShiftModal = false;
+            this.activeShift = null;
+            this.logout();
+          } else {
+            alert("เกิดข้อผิดพลาด: " + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          this.isShiftProcessing = false;
+          alert("เกิดข้อผิดพลาดในการปิดกะ: " + err.message);
+        })
+        .closeShift(customerSheetId, payload);
+    },
+    openCashMovementModal() {
+      this.cashForm = { type: 'Paid Out', amount: '', reason: this.paidOutReasons[0], detail: '' };
+      this.showCashMovementModal = true;
+    },
+    changeCashType(type) {
+      this.cashForm.type = type;
+      this.cashForm.reason = type === 'Paid Out' ? this.paidOutReasons[0] : this.paidInReasons[0];
+    },
+    applyHistoryDatePreset() {
+      // คำนวณช่วงวันที่ตามตัวเลือกที่เลือก แล้วโหลดข้อมูลใหม่
+      if (this.historyDatePreset === 'all') {
+        this.historyStartDate = '';
+        this.historyEndDate = '';
+        this.loadHistoryData();
+        return;
+      }
+
+      const now = new Date();
+      let start = new Date();
+      let end = new Date();
+
+      if (this.historyDatePreset === 'today') {
+        // start = end = วันนี้ (ค่าเริ่มต้นของ start/end อยู่แล้ว)
+      } else if (this.historyDatePreset === '7days') {
+        start.setDate(now.getDate() - 6);
+      } else if (this.historyDatePreset === 'thisMonth') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (this.historyDatePreset === 'thisYear') {
+        start = new Date(now.getFullYear(), 0, 1);
+      }
+
+      this.historyStartDate = formatDateForInput(start);
+      this.historyEndDate = formatDateForInput(end);
+      this.loadHistoryData();
+    },
+    onHistoryDateInputChange() {
+      // เมื่อผู้ใช้แก้วันที่เองในช่อง เริ่ม/ถึง ให้ถือว่าเป็นช่วงกำหนดเอง แล้วโหลดข้อมูลใหม่ทันที
+      this.historyDatePreset = 'custom';
+      this.loadHistoryData();
+    },
+    // ✅ แก้ชื่อจาก SubmitCashMovement -> submitCashMovement (ตรงกับที่ template เรียก @click="submitCashMovement")
+    submitCashMovement() {
+      const customerSheetId = this.customerSheetId;
+      const amountNum = Number(this.cashForm.amount);
+      if (!amountNum || amountNum <= 0) {
+        alert('⚠️ กรุณากรอกจำนวนเงินให้ถูกต้อง (ต้องมากกว่า 0)');
+        return;
+      }
+      this.cashMovementLoading = true;
+      const payload = {
+        shiftId: this.activeShift ? this.activeShift.shiftId : '',
+        staff: this.currentUser ? (typeof this.currentUser === 'object' ? this.currentUser.name : this.currentUser) : 'พนักงาน',
+        type: this.cashForm.type,
+        amount: amountNum,
+        reason: this.cashForm.reason,
+        detail: this.cashForm.detail
+      };
+      google.script.run
+        .withSuccessHandler(res => {
+          this.cashMovementLoading = false;
+          if (res.success) {
+            this.openCashDrawer();
+            alert('✅ ' + res.message);
+            this.showCashMovementModal = false;
+          } else {
+            alert('❌ เกิดข้อผิดพลาด: ' + res.message);
+          }
+        })
+        .withFailureHandler(err => {
+          this.cashMovementLoading = false;
+          alert('❌ เกิดข้อผิดพลาดจาก Server: ' + err.message);
+        })
+        .saveCashMovement(customerSheetId, payload);
+    },
+    // ✅ แก้ signature: เอา customerSheetId ออกจากพารามิเตอร์ (เรียกจาก applyHistoryDatePreset/onHistoryDateInputChange โดยไม่ส่ง arg)
+    loadHistoryData() {
+      const customerSheetId = this.customerSheetId;
+      const startDate = this.historyStartDate || '';
+      const endDate = this.historyEndDate || '';
+
+      google.script.run.withSuccessHandler((res) => {
+        if (res && res.success) {
+          this.salesHistory = res.data || [];
+        }
+      }).getSalesHistory(customerSheetId, startDate, endDate);
+
+      google.script.run.withSuccessHandler((res) => {
+        if (res && res.success) {
+          this.shiftHistory = res.shifts || [];
+          this.cashMovements = res.movements || [];
+        }
+      }).getShiftHistory(customerSheetId, startDate, endDate);
+    },
+    // ✅ แก้ชื่อจาก ViewBillDetails -> viewBillDetails และแก้ signature ให้รับแค่ tx ตัวเดียว
+    // (ตรงกับที่ template เรียก @click="viewBillDetails(sale.txId)")
+    viewBillDetails(tx) {
+      const customerSheetId = this.customerSheetId;
+      // 1. แยกแยะว่าส่งมาเป็น Object บิล หรือส่งมาเป็น รหัสบิล (ID)
+      if (typeof tx === 'object' && tx !== null) {
+        this.selectedBill = tx;
+      } else {
+        const txId = tx;
+        if (this.transactions && Array.isArray(this.transactions)) {
+          this.selectedBill = this.transactions.find(t => 
+            (t.id == txId || t.txId == txId || t.TxID == txId || t.TransactionID == txId || t['Transaction ID'] == txId)
+          ) || { id: txId };
+        } else {
+          this.selectedBill = { id: txId };
+        }
+      }
+
+      const targetId = (typeof tx === 'object')
+        ? (tx.id || tx.txId || tx.TxID || tx.TransactionID || tx['Transaction ID']) 
+        : tx;
+
+      // 2. ดึงรายการสินค้าจากหลังบ้าน
+      google.script.run.withSuccessHandler((res) => {
+        if (res && res.success) {
+          this.currentBillItems = res.items || [];
+          
+          // 🟢 นำข้อมูลจากสินค้าชิ้นแรกใน CashLogs มาแปะหัวบิลอัตโนมัติ (กันหัวบิลว่าง)
+          if (this.currentBillItems.length > 0) {
+            const firstItem = this.currentBillItems[0];
+            this.selectedBill = {
+              id: targetId || firstItem.TxID || firstItem.txId || firstItem.id,
+              timestamp: firstItem.Timestamp || firstItem.timestamp || firstItem.date,
+              staff: firstItem.StaffName || firstItem.staffName || firstItem.staff || 'แอดมิน',
+              paymentMethod: firstItem.PaymentMethod || firstItem.paymentMethod || firstItem.payment || 'โอนเงิน'
+            };
+          }
+          
+          this.showBillDetailModal = true;
+        }
+      }).getTransactionItems(customerSheetId, targetId);
+    },
+    openStaffModal() {
+      const modal = document.getElementById('staffModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        loadStaffList();
+      }
+    },
+    openStoreConfigModal() {
+      this.showStoreSettingsModal = true;
+    },
+    // ✅ แก้ชื่อจาก HandleCancelBill -> handleCancelBill และแก้ signature ให้รับแค่ txId ตัวเดียว
+    // (ตรงกับที่ template เรียก @click="handleCancelBill(sale.txId)")
+    handleCancelBill(txId) {
+      const customerSheetId = this.customerSheetId;
+      if (confirm("คุณแน่ใจหรือไม่ที่จะยกเลิกบิล " + txId + " ?\nระบบจะทำการคืนสินค้าทั้งหมดในบิลเข้าสต็อกให้อัตโนมัติ")) {
+        google.script.run.withSuccessHandler((res) => {
+          alert(res.message);
+          if (res && res.success) {
+            this.loadHistoryData(); 
+            if (typeof this.fetchProducts === 'function') {
+              this.fetchProducts(); 
+            }
+          }
+        }).cancelTransaction(customerSheetId, txId);
+      }
+    }
+
+  },
+  mounted() {
+    this.loadStoreConfig();
+    let page = null;
+    let txId = null;
+    try {
+      const fullUrl = window.location.href;
+      const urlParams = new URLSearchParams(window.location.search);
+      page = urlParams.get('page');
+      txId = urlParams.get('txId');
+      if (!txId) {
+        const pageMatch = fullUrl.match(/[?&]page=([^&]+)/);
+        const txMatch = fullUrl.match(/[?&]txId=([^&]+)/);
+        if (pageMatch) page = pageMatch[1];
+        if (txMatch) txId = txMatch[1];
+      }
+    } catch (e) {
+      console.error("Error URL parsing:", e);
+    }
+    if (page === 'receipt' && txId) {
+      this.currentUser = { name: 'ลูกค้า', role: 'customer' };
+      this.lastTxId = txId;
+      this.showReceiptModal = true;
+      this.showStoreSettingsModal = false;
+      if (typeof this.fetchReceiptDetail === 'function') {
+        this.fetchReceiptDetail(txId);
+      }
+    }
+  }
+}).mount('#app');
+
+/**
+ * 📊 ส่วนควบคุมหน้า DASHBOARD
+ * (ฟังก์ชันเหล่านี้อยู่นอก Vue instance เลยใช้ this.customerSheetId ไม่ได้
+ *  ต้องใช้ CUSTOMER_SHEET_ID ตัวแปร global แทน)
+ */
+function loadDashboardData() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  const startDate = document.getElementById('dashStartDate')?.value || '';
+  const endDate = document.getElementById('dashEndDate')?.value || '';
+  const salesElement = document.getElementById('statTotalSales');
+  if (salesElement) salesElement.innerText = '⌛...';
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (!response.success) {
+        alert('❌ Dashboard error: ' + response.message);
+        console.error('Error:', response.message);
+        return;
+      }
+      const sales = response.sales || [];
+      let totalSales = 0;
+      let totalCost = 0;
+      let cashSales = 0;
+      let qrSales = 0;
+      const productSalesMap = {}; 
+
+      sales.forEach(sale => {
+        totalSales += sale.totalAmount;
+        const method = String(sale.paymentMethod || '');
+        if (method.includes('โอน') || method.includes('qr')) {
+          qrSales += sale.totalAmount;
+        } else {
+          cashSales += sale.totalAmount;
+        }
+        try {
+          let items = sale.itemsJson;
+          if (typeof items === 'string') items = JSON.parse(items);
+          if (Array.isArray(items)) {
+            items.forEach(item => {
+              const name = item.name || 'สินค้า';
+              const qty = Number(item.qty) || 1;
+              const cost = Number(item.cost || 0); 
+              totalCost += (cost * qty); 
+              productSalesMap[name] = (productSalesMap[name] || 0) + qty;
+            });
+          }
+        } catch(e) { console.warn('JSON Parse error in order:', sale.orderId); }
+      });
+
+      const totalOrders = sales.length;
+      const netProfit = totalSales - totalCost;
+      const avgOrder = totalOrders > 0 ? (totalSales / totalOrders) : 0;
+      const margin = totalSales > 0 ? ((netProfit / totalSales) * 100) : 0;
+      
+      updateElementText('statTotalSales', '฿' + totalSales.toLocaleString());
+      updateElementText('statTotalOrders', totalOrders + ' บิล');
+      updateElementText('statNetProfit', '฿' + netProfit.toLocaleString());
+      updateElementText('statTotalCost', '฿' + totalCost.toLocaleString());
+      updateElementText('statMargin', 'Margin ' + margin.toFixed(1) + '%');
+      updateElementText('statAvgOrder', '฿' + Math.round(avgOrder).toLocaleString());
+      updateElementText('statCashSales', '฿' + cashSales.toLocaleString());
+      updateElementText('statQrSales', '฿' + qrSales.toLocaleString());
+      renderTopSellers(productSalesMap);
+      renderLowStockList(response.lowStockItems || []);
+    })
+    .withFailureHandler(function(err) {
+      alert('❌ RPC failed: ' + (err && err.message ? err.message : err));
+      const el = document.getElementById('statTotalSales');
+      if (el) el.innerText = 'Error';
+    })
+    .getDashboardData(customerSheetId, startDate, endDate);
+}
+
+function updateElementText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.innerText = text;
+}
+
+function onPresetDateChange(preset) {
+  const startInput = document.getElementById('dashStartDate');
+  const endInput = document.getElementById('dashEndDate');
+  if (!startInput || !endInput) return;
+  const now = new Date();
+  let start = new Date();
+  let end = new Date();
+
+  if (preset === 'today') {
+  } else if (preset === '7days') {
+    start.setDate(now.getDate() - 6);
+  } else if (preset === 'thisMonth') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (preset === 'thisYear') {
+    start = new Date(now.getFullYear(), 0, 1);
+  }
+  startInput.value = formatDateForInput(start);
+  endInput.value = formatDateForInput(end);
+  loadDashboardData();
+}
+
+function formatDateForInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function renderTopSellers(salesMap) {
+  const container = document.getElementById('topSellersList');
+  if (!container) return;
+  const sorted = Object.entries(salesMap)
+    .sort((a, b) => b[1] - a[1]) 
+    .slice(0, 5); 
+
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">ไม่มีข้อมูลการขาย</div>';
+    return;
+  }
+  container.innerHTML = sorted.map(([name, qty], index) => `
+    <div class="flex justify-between items-center bg-slate-900/60 p-3 rounded-xl border border-slate-700/40 text-xs mb-2">
+      <div class="flex items-center gap-3">
+        <span class="w-6 h-6 rounded-full ${index === 0 ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-400'} font-bold flex items-center justify-center text-[10px]">
+          ${index + 1}
+        </span>
+        <span class="text-slate-200 font-medium">${name}</span>
+      </div>
+      <span class="text-emerald-400 font-extrabold">${qty.toLocaleString()} ชิ้น</span>
+    </div>
+  `).join('');
+}
+
+function renderLowStockList(lowItems) {
+  const lowStockBox = document.getElementById('lowStockWarningBox');
+  if (!lowStockBox) return;
+  if (lowItems && lowItems.length > 0) {
+    lowStockBox.innerHTML = lowItems.map(i => `
+      <div class="flex justify-between items-center bg-rose-950/30 border border-rose-800/40 p-2.5 rounded-xl text-xs mb-2">
+        <span class="text-slate-200 font-medium">⚠️ ${i.name}</span>
+        <span class="text-rose-400 font-bold">เหลือ ${i.stock} ชิ้น (เกณฑ์ ${i.minStock})</span>
+      </div>
+    `).join('');
+  } else {
+    lowStockBox.innerHTML = '<div class="text-xs text-slate-500 text-center py-2">ไม่มีสินค้าใกล้หมด</div>';
+  }
+}
+
+function checkOutOfStock() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (!response.success) {
+        alert('❌ เกิดข้อผิดพลาด: ' + response.message);
+        return;
+      }
+      const outOfStockItems = response.products || [];
+      if (outOfStockItems.length === 0) {
+        alert('🎉 สบายใจได้ครับ! ไม่มีสินค้าหมดหรือติดลบเลย');
+        return;
+      }
+      if (typeof renderProducts === 'function') {
+        renderProducts(outOfStockItems);
+      } else if (typeof renderProductList === 'function') {
+        renderProductList(outOfStockItems);
+      } else if (typeof displayProducts === 'function') {
+        displayProducts(outOfStockItems);
+      } else if (typeof loadProducts === 'function') {
+        loadProducts(outOfStockItems);
+      }
+      const countEl = document.querySelector('.text-slate-400') || document.getElementById('productCount');
+      if (countEl) {
+        countEl.innerText = `รายการสินค้าทั้งหมด (แสดงเฉพาะสินค้าหมด/ติดลบ ${outOfStockItems.length} รายการ)`;
+      }
+    })
+    .getOutOfStockProducts(customerSheetId);
+}
+
+// เปิดหน้าต่างป๊อปอัพ
+function openStaffModal() {
+  var modal = document.getElementById('staffModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    loadStaffList(); // ดึงรายการพนักงานมาแสดง
+  }
+}
+
+// ปิดหน้าต่างป๊อปอัพ
+function closeStaffModal() {
+  var modal = document.getElementById('staffModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// ดึงรายชื่อพนักงานมาแสดงในตาราง
+function loadStaffList() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  var tbody = document.getElementById('staffTableBody');
+  if (!tbody) return;
+
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(function(staffList) {
+      tbody.innerHTML = '';
+      if (!staffList || staffList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px; color:#64748b;">ไม่มีข้อมูลพนักงาน</td></tr>';
+        return;
+      }
+      staffList.forEach(function(item) {
+        var tr = document.createElement('tr');
+        var roleBadge = item.role === 'admin' 
+          ? '<span class="badge-admin">แอดมิน</span>' 
+          : '<span class="badge-staff">พนักงาน</span>';
+        
+        tr.innerHTML = `
+          <td>${item.username}</td>
+          <td>${roleBadge}</td>
+          <td style="text-align: center;">
+            <button onclick="deleteStaff('${customerSheetId}', '${item.username}')" class="btn-del">ลบ</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }).getStaffList(customerSheetId);
+  }
+}
+
+// บันทึกพนักงานใหม่
+function addStaff() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  var name = document.getElementById('staffNameInput').value;
+  var pin = document.getElementById('staffPinInput').value;
+  var role = document.getElementById('staffRoleInput').value;
+
+  if (!name || !pin) {
+    alert('กรุณากรอกชื่อและรหัส PIN ให้ครบถ้วนครับ');
+    return;
+  }
+
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(function() {
+      alert('เพิ่มพนักงานเรียบร้อยแล้ว!');
+      document.getElementById('staffNameInput').value = '';
+      document.getElementById('staffPinInput').value = '';
+      loadStaffList();
+    }).saveNewStaff(customerSheetId, name, pin, role);
+  }
+}
+
+// ลบพนักงาน (customerSheetId ถูกส่งมาจาก loadStaffList อยู่แล้วในปุ่ม onclick ด้านบน)
+function deleteStaff(customerSheetId, username) {
+  if (confirm('ต้องการลบพนักงาน ' + username + ' ใช่หรือไม่?')) {
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run.withSuccessHandler(function() {
+        loadStaffList();
+      }).removeStaff(customerSheetId, username);
+    }
+  }
+}
+
+// เปิดหน้าต่างป๊อปอัพตั้งค่าการชำระเงิน
+function openPaymentSettingsModal() {
+  var modal = document.getElementById('paymentSettingsModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    loadPaymentSettings(); // ดึงข้อมูลการชำระเงินมาแสดง
+  }
+}
+
+// ปิดหน้าต่างป๊อปอัพ
+function closePaymentSettingsModal() {
+  var modal = document.getElementById('paymentSettingsModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// ดึงข้อมูลการชำระเงินเดิมมาแสดงในช่องกรอก
+function loadPaymentSettings() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(function(res) {
+      if (res && res.success && res.data) {
+        document.getElementById('settingPromptPay').value = res.data.promptpay_id || '';
+        document.getElementById('settingBankName').value = res.data.bank_name || '';
+        document.getElementById('settingAccountNumber').value = res.data.account_number || '';
+        document.getElementById('settingAccountName').value = res.data.account_name || '';
+      }
+    }).getPaymentSettings(customerSheetId);
+  }
+}
+
+// บันทึกข้อมูลการชำระเงิน
+function savePaymentSettingsFromUI() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  var payload = {
+    promptpay_id: document.getElementById('settingPromptPay').value.trim(),
+    bank_name: document.getElementById('settingBankName').value.trim(),
+    account_number: document.getElementById('settingAccountNumber').value.trim(),
+    account_name: document.getElementById('settingAccountName').value.trim()
+  };
+
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(function(res) {
+      if (res && res.success) {
+        alert("บันทึกข้อมูลการชำระเงินเรียบร้อยแล้ว!");
+        closePaymentSettingsModal();
+      } else {
+        alert("เกิดข้อผิดพลาด: " + (res.message || "ไม่สามารถบันทึกได้"));
+      }
+    }).savePaymentSettings(customerSheetId, payload);
+  }
+}
+
+// ฟังก์ชันดึงเลขบัญชีธนาคารมาโชว์ในกล่องชำระเงิน
+function updateBankDetailsDisplay() {
+  const customerSheetId = CUSTOMER_SHEET_ID;
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.withSuccessHandler(function(res) {
+      if (res && res.success && res.data) {
+        var bankNameElem = document.getElementById('displayBankName');
+        var accNumElem = document.getElementById('displayAccountNumber');
+        var accNameElem = document.getElementById('displayAccountName');
+
+        if (bankNameElem) bankNameElem.innerText = res.data.bank_name || '-';
+        if (accNumElem) accNumElem.innerText = res.data.account_number || '-';
+        if (accNameElem) accNameElem.innerText = res.data.account_name || '-';
+      }
+    }).getPaymentSettings(customerSheetId);
+  }
+}
+
+	</script>
+
+<!-- หน้าต่างป๊อปอัพจัดการพนักงาน -->
+<div id="staffModal" class="staff-modal-overlay">
+  <div class="staff-modal-card">
+    <div class="modal-header">
+      <h3>🪪 จัดการพนักงาน</h3>
+      <button onclick="closeStaffModal()" class="btn-close-modal">✕</button>
+    </div>
+
+    <!-- ฟอร์มเพิ่มพนักงาน -->
+    <div class="staff-form">
+      <input type="text" id="staffNameInput" placeholder="ชื่อพนักงาน" class="modal-input">
+      <input type="password" id="staffPinInput" placeholder="รหัส PIN (4-6 หลัก)" class="modal-input">
+      <select id="staffRoleInput" class="modal-input">
+        <option value="staff">พนักงาน (Staff)</option>
+        <option value="admin">แอดมิน (Admin)</option>
+      </select>
+      <button onclick="addStaff()" class="btn-add-staff">+ เพิ่มพนักงาน</button>
+    </div>
+
+    <!-- ตารางรายชื่อ -->
+    <div class="table-box">
+      <table class="staff-table">
+        <thead>
+          <tr>
+            <th>ชื่อ</th>
+            <th>ตำแหน่ง</th>
+            <th style="text-align: center;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="staffTableBody">
+          <!-- ข้อมูลจะมาเด้งตรงนี้ -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 🎨 สไตล์ตกแต่งปุ่มบับเบิลและหน้าต่างป๊อปอัพ -->
+<style>
+  /* สไตล์ปุ่มบับเบิลแบบแคปซูลเรืองแสง */
+  .btn-bubble-staff {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #38bdf8;
+    border: 1px solid #0284c7;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+    transition: all 0.2s ease-in-out;
+  }
+  .btn-bubble-staff:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+    border-color: #38bdf8;
+  }
+  .btn-bubble-staff:active {
+    transform: scale(0.95);
+  }
+
+  /* หน้าต่างป๊อปอัพทับหน้าจอ (Fix ปัญหากดไม่ติด) */
+  .staff-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+  }
+  .staff-modal-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    width: 100%;
+    max-width: 420px;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    color: white;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .modal-header h3 { margin: 0; font-size: 18px; color: #f8fafc; }
+  .btn-close-modal {
+    background: transparent; border: none; color: #94a3b8; font-size: 18px; cursor: pointer;
+  }
+  .staff-form {
+    display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;
+  }
+  .modal-input {
+    padding: 10px; border-radius: 8px; border: 1px solid #475569;
+    background: #0f172a; color: white; font-size: 14px; outline: none;
+  }
+  .modal-input:focus { border-color: #38bdf8; }
+  .btn-add-staff {
+    padding: 10px; background: #10b981; color: white; border: none;
+    border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s;
+  }
+  .btn-add-staff:hover { background: #059669; }
+  .table-box { max-height: 200px; overflow-y: auto; border: 1px solid #334155; border-radius: 8px; }
+  .staff-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+  .staff-table th { background: #0f172a; padding: 10px; color: #94a3b8; }
+  .staff-table td { padding: 10px; border-top: 1px solid #334155; }
+  .badge-admin { background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  .badge-staff { background: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  .btn-del { background: #dc2626; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+</style>
+
+<!-- ป๊อปอัปตั้งค่าการชำระเงิน (ธีมเขียวมรกต Emerald) -->
+<div id="paymentSettingsModal" class="payment-modal-overlay">
+  <div class="payment-modal-card">
+    <div class="modal-header">
+      <h3 style="color: #34d399;">💳 ตั้งค่าช่องทางการชำระเงิน</h3>
+      <button onclick="closePaymentSettingsModal()" class="btn-close-modal">✕</button>
+    </div>
+
+    <!-- ฟอร์มกรอกข้อมูล -->
+    <div class="payment-form">
+      <div>
+        <label class="payment-label">เบอร์ PromptPay / เลขบัตรประชาชน</label>
+        <input type="text" id="settingPromptPay" placeholder="เช่น 0645315797" class="modal-input payment-input">
+      </div>
+
+      <div>
+        <label class="payment-label">ชื่อธนาคาร</label>
+        <input type="text" id="settingBankName" placeholder="เช่น กสิกรไทย" class="modal-input payment-input">
+      </div>
+
+      <div>
+        <label class="payment-label">เลขที่บัญชี</label>
+        <input type="text" id="settingAccountNumber" placeholder="เช่น 123-4-56789-0" class="modal-input payment-input">
+      </div>
+
+      <div>
+        <label class="payment-label">ชื่อบัญชี</label>
+        <input type="text" id="settingAccountName" placeholder="เช่น ร้านค้าของคุณ" class="modal-input payment-input">
+      </div>
+    </div>
+
+    <!-- ปุ่มกดด้านล่าง -->
+    <div class="payment-action-btns">
+      <button onclick="closePaymentSettingsModal()" class="btn-cancel">ยกเลิก</button>
+      <button onclick="savePaymentSettingsFromUI()" class="btn-save-payment">📝 บันทึกข้อมูล</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🎨 สไตล์ตกแต่งป๊อปอัปตั้งค่าชำระเงิน (ธีมเขียวมรกตเรืองแสง) -->
+<style>
+  .payment-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+  }
+  .payment-modal-card {
+    background: #0f172a;
+    border: 1px solid #059669;
+    width: 100%;
+    max-width: 420px;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.2);
+    color: white;
+  }
+  .payment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .payment-label {
+    display: block;
+    font-size: 12px;
+    color: #a7f3d0;
+    margin-bottom: 4px;
+  }
+  .payment-input:focus {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+  .payment-action-btns {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid #1e293b;
+    padding-top: 15px;
+  }
+  .btn-cancel {
+    padding: 8px 16px;
+    background: #334155;
+    color: #cbd5e1;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .btn-cancel:hover { background: #475569; }
+  .btn-save-payment {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: white;
+    border: 1px solid #34d399;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    transition: all 0.2s;
+  }
+  .btn-save-payment:hover {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+  }
+</style>
+
+</body>
+</html>

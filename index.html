@@ -2316,6 +2316,11 @@ function updateBankDetailsDisplay() {
   }
 }
 
+  window.addEventListener('load', function() {
+    // ปรับความสูงของกรอบฝังให้พอดีกับเนื้อหาจริง
+    google.script.host.setHeight(document.body.scrollHeight);
+  });
+
 	</script>
 
 <!-- หน้าต่างป๊อปอัพจัดการพนักงาน -->

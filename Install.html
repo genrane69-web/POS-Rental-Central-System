@@ -46,13 +46,18 @@
     </div>
 
     <? if (canRenew) { ?>
-    <div id="renewSection">
-      <button id="renewBtn" onclick="startRenewal()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold rounded-2xl text-base transition duration-200 shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2">
-        <span>💳</span>
-        <span>ต่ออายุสมาชิก 30 วัน</span>
-      </button>
-      <p class="text-[11px] text-slate-500 mt-3 font-light">ชำระผ่านพร้อมเพย์ ต่ออายุอัตโนมัติทันทีที่จ่ายสำเร็จ</p>
-    </div>
+    <div id="renewSection" class="space-y-2.5">
+  <p class="text-xs text-slate-400 mb-1 text-left">เลือกแพ็กเกจต่ออายุ</p>
+  <button id="renewBtnDaily" onclick="startRenewal('daily')" class="w-full py-3 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold rounded-2xl text-sm transition duration-200 border border-slate-700 flex items-center justify-between px-5">
+    <span class="flex items-center gap-2"><span>📅</span><span>รายวัน</span></span>
+    <span class="text-emerald-400 font-bold">10 บาท/วัน</span>
+  </button>
+  <button id="renewBtnMonthly" onclick="startRenewal('monthly')" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold rounded-2xl text-base transition duration-200 shadow-lg shadow-emerald-950/50 flex items-center justify-between px-5">
+    <span class="flex items-center gap-2"><span>💳</span><span>รายเดือน</span></span>
+    <span class="font-bold">199 บาท / 30 วัน</span>
+  </button>
+  <p class="text-[11px] text-slate-500 mt-2 font-light">ชำระผ่านพร้อมเพย์ ต่ออายุอัตโนมัติทันทีที่จ่ายสำเร็จ</p>
+</div>
 
     <div id="qrBox" class="hidden bg-[#1D283A] border border-slate-700/60 rounded-2xl p-5 mt-4 text-center space-y-3">
       <p id="qrStatus" class="text-xs text-slate-300 font-medium">สแกน QR เพื่อชำระเงิน</p>

@@ -111,19 +111,19 @@ function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
   const txId = (e && e.parameter) ? (e.parameter.txId || e.parameter.receiptId || '') : '';
 
-  // 0️⃣ หน้า Super Admin (จัดการผู้เช่าทั้งหมด — เฉพาะเจ้าของระบบ)
+  // 0️⃣ หน้า Super Admin
   if (page === 'superadmin') {
     const adminEmail = Session.getActiveUser().getEmail();
     if (!adminEmail || adminEmail.trim().toLowerCase() !== SUPER_ADMIN_EMAIL.trim().toLowerCase()) {
       return HtmlService.createHtmlOutput('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#e11d48;">🚫 ไม่มีสิทธิ์เข้าถึงหน้านี้</div>');
     }
-    return HtmlService.createTemplateFromFile('SuperAd').evaluate()
+    return HtmlService.createTemplateFromFile('SperAd').evaluate()
       .setTitle('จัดการผู้เช่า - VEGA POS')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 1️⃣ ถ้าเป็นการเปิดดูใบเสร็จ (ลูกค้าสแกน QR Code)
+  // 1️⃣ หน้าดูใบเสร็จ
   if (page === 'receipt' && txId) {
     const tpl = HtmlService.createTemplateFromFile('Receipt');
     tpl.txId = txId;
@@ -135,24 +135,22 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 2️⃣ ดึงอีเมลของผู้ที่เปิดลิงก์เข้ามาใช้งาน
   const userEmail = Session.getActiveUser().getEmail();
-
-  // 3️⃣ ค้นหา Sheet ID ของลูกค้าคนนี้จากชีตแอดมิน
   const customerInfo = getCustomerSheetIdByEmail(userEmail);
 
-  // 4️⃣ ถ้ายังไม่มีในชีตแอดมิน -> เปิดหน้าเด้งติดตั้ง (Install.html)
+  // 4️⃣ ยังไม่เคยติดตั้ง
   if (!customerInfo.isInstalled) {
     const tpl = HtmlService.createTemplateFromFile('Install');
     tpl.userEmail = userEmail;
     tpl.expiredMessage = '';
+    tpl.canRenew = false;
     return tpl.evaluate()
       .setTitle('ติดตั้งระบบ VEGA POS')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 4.5️⃣ หมดอายุ หรือถูกระงับ -> เปิดหน้าต่ออายุ
+  // 4.5️⃣ หมดอายุ หรือถูกระงับ
   const expireDate = customerInfo.expireDate ? parseCustomDate(null, customerInfo.expireDate) : null;
   const isExpired = expireDate ? (new Date() > expireDate) : false;
   const isSuspended = String(customerInfo.status || '').trim() !== 'Active';
@@ -163,13 +161,14 @@ function doGet(e) {
     tpl.expiredMessage = isExpired
       ? 'แพ็กเกจของคุณหมดอายุแล้ว กรุณาต่ออายุเพื่อใช้งานต่อ'
       : 'บัญชีของคุณถูกระงับการใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบ';
+    tpl.canRenew = isExpired && !isSuspended; // ถูกระงับด้วยมือ ต้องให้แอดมินปลดล็อกเอง
     return tpl.evaluate()
       .setTitle('ต่ออายุ VEGA POS')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
-  // 5️⃣ ถ้าติดตั้งแล้วและยังใช้งานได้ -> เปิดหน้า POS (Index.html)
+  // 5️⃣ ใช้งานได้ปกติ
   const tpl = HtmlService.createTemplateFromFile('Index');
   tpl.customerSheetId = customerInfo.sheetId; 
   tpl.webAppUrl = ScriptApp.getService().getUrl();

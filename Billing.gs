@@ -111,7 +111,8 @@ function doPost(e) {
 
     if (verifyRes && verifyRes.status === "successful" && verifyRes.paid) {
       const email = verifyRes.metadata && verifyRes.metadata.email;
-      const days = (verifyRes.metadata && Number(verifyRes.metadata.days)) || RENEWAL_DAYS;
+      const days = (verifyRes.metadata && Number(verifyRes.metadata.days)) || 30;
+
 
       if (email) {
         extendTenant_(email, days);

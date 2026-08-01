@@ -12,8 +12,10 @@
 const OMISE_PUBLIC_KEY = "pkey_test_68irdufiu38kxwnn298";
 const OMISE_SECRET_KEY = "skey_test_68irdug165wnf64t396";// 🔑 ใส่ Secret Key ตรงนี้
 
-const RENEWAL_AMOUNT_BAHT = 199; // ราคาต่ออายต่อครั้ง (บาท) — ปรับตามที่ต้องการ
-const RENEWAL_DAYS = 30;         // จำนวนวันที่ต่ออายุให้ต่อการชำระเงิน 1 ครั้ง
+const RENEWAL_PLANS = {
+  daily:   { days: 1,  amount: 10,  label: 'รายวัน (10 บาท/วัน)' },
+  monthly: { days: 30, amount: 199, label: 'รายเดือน (199 บาท/30 วัน)' }
+};
 
 // ==========================================================
 // 1. สร้างรายการชำระเงิน + QR พร้อมเพย์ (เรียกจากหน้าตออายุฝั่งลูกค้า)

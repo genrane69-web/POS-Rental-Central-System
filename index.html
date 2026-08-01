@@ -144,7 +144,17 @@
       </div>
     </header>
 
-    <!-- VIEW 1: หน้าขาย POS -->
+    <!-- แถบชำระเงินลอยด้านล่าง (มือถือเท่านั้น) -->
+<div v-if="currentView === 'pos' && cart.length > 0" class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0f172a] border-t border-emerald-500/40 p-3 shadow-2xl">
+  <button
+    @click="openPaymentModal"
+    class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-base rounded-xl glow-green transition active:scale-98 shadow-lg flex justify-between items-center px-5">
+    <span>🛒 {{ cart.length }} รายการ</span>
+    <span>💳 ชำระเงิน ฿{{ totalAmount }}</span>
+  </button>
+</div>
+
+<!-- VIEW 1: หน้าขาย POS -->
     <div v-if="currentView === 'pos'" class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="md:col-span-2 space-y-4">
         <input v-model="searchQuery" type="text" placeholder="🔍 ค้นหาสินค้า/บาร์โค้ด..."

@@ -9,11 +9,13 @@
   <style>
     body { font-family: 'Prompt', sans-serif; background-color: #080C14; }
     .custom-spinner {
-      border: 4px solid #1E283A;
-      border-top: 4px solid #10B981;
-      border-radius: 50%;
-      width: 52px;
-      height: 52px;
+      border: 4px solid #1E283A; border-top: 4px solid #10B981;
+      border-radius: 50%; width: 52px; height: 52px;
+      animation: spin 0.9s linear infinite;
+    }
+    .custom-spinner-sm {
+      border: 3px solid #1E283A; border-top: 3px solid #10B981;
+      border-radius: 50%; width: 18px; height: 18px;
       animation: spin 0.9s linear infinite;
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -22,7 +24,7 @@
 <body class="text-slate-100 min-h-screen flex items-center justify-center p-4">
 
   <? if (expiredMessage && expiredMessage !== '') { ?>
-  <!-- Card: บัญชีหมดอายุ / ถูกระงับ (ไม่มีปุ่มติดตั้งซ้ำเด็ดขาด) -->
+  <!-- Card: บัญชีหมดอายุ / ถูกระงับ -->
   <div class="max-w-md w-full bg-[#111827] border border-rose-800/60 rounded-3xl p-7 text-center shadow-2xl relative overflow-hidden">
     <div class="absolute -top-10 -left-10 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -31,27 +33,45 @@
       <span class="text-2xl font-bold text-emerald-400 tracking-wide">VEGA POS</span>
     </div>
 
-    <div class="w-16 h-16 bg-rose-950/60 border border-rose-700/60 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">
-      🔒
-    </div>
+    <div class="w-16 h-16 bg-rose-950/60 border border-rose-700/60 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">🔒</div>
 
     <h1 class="text-xl font-bold text-white mb-2">ไม่สามารถใช้งานได้ในขณะนี้</h1>
     <p class="text-rose-300 text-sm mb-6 font-medium"><?= expiredMessage ?></p>
 
-    <div class="bg-[#1D283A] border border-slate-700/60 rounded-2xl p-4 text-left text-xs space-y-2">
+    <div class="bg-[#1D283A] border border-slate-700/60 rounded-2xl p-4 text-left text-xs space-y-2 mb-6">
       <div class="flex justify-between">
         <span class="text-slate-400">📧 บัญชี:</span>
         <span class="text-emerald-400 truncate max-w-[190px]"><?= userEmail ?></span>
       </div>
     </div>
 
-    <p class="text-[11px] text-slate-500 mt-6 font-light">
-      กรุณาติดต่อผู้ดูแลระบบเพื่อขอต่ออายุการใช้งาน
-    </p>
+    <? if (canRenew) { ?>
+    <div id="renewSection">
+      <button id="renewBtn" onclick="startRenewal()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold rounded-2xl text-base transition duration-200 shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2">
+        <span>💳</span>
+        <span>ต่ออายุสมาชิก 30 วัน</span>
+      </button>
+      <p class="text-[11px] text-slate-500 mt-3 font-light">ชำระผ่านพร้อมเพย์ ต่ออายุอัตโนมัติทันทีที่จ่ายสำเร็จ</p>
+    </div>
+
+    <div id="qrBox" class="hidden bg-[#1D283A] border border-slate-700/60 rounded-2xl p-5 mt-4 text-center space-y-3">
+      <p id="qrStatus" class="text-xs text-slate-300 font-medium">สแกน QR เพื่อชำระเงิน</p>
+      <div class="bg-white p-2 rounded-xl inline-block">
+        <img id="qrImage" src="" class="w-40 h-40 mx-auto" alt="QR พร้อมเพย์">
+      </div>
+      <p id="qrAmount" class="text-emerald-400 font-bold text-lg"></p>
+      <div class="flex items-center justify-center gap-2 text-xs text-slate-400">
+        <div class="custom-spinner-sm"></div>
+        <span id="qrWaiting">กำลังรอการชำระเงิน...</span>
+      </div>
+    </div>
+    <? } else { ?>
+    <p class="text-[11px] text-slate-500 font-light">กรุณาติดต่อผู้ดูแลระบบเพื่อขอเปิดใช้งานอีกครั้ง</p>
+    <? } ?>
   </div>
 
   <? } else { ?>
-  <!-- Card 1: หน้าต่างปุ่มกดติดตั้งระบบ (เฉพาะบัญชีใหม่เท่านั้น) -->
+  <!-- Card 1: หน้าต่างปุ่มกดติดตั้งระบบ -->
   <div id="mainCard" class="max-w-md w-full bg-[#111827] border border-slate-800/80 rounded-3xl p-7 text-center shadow-2xl relative overflow-hidden">
     <div class="absolute -top-10 -left-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -59,21 +79,13 @@
     <div class="flex items-center justify-center gap-2 mb-6">
       <span class="text-2xl">🛒</span>
       <span class="text-2xl font-bold text-emerald-400 tracking-wide">VEGA POS</span>
-      <span class="bg-purple-900/60 border border-purple-500/40 text-purple-300 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 shadow-sm">
-        👑 SaaS Setup
-      </span>
+      <span class="bg-purple-900/60 border border-purple-500/40 text-purple-300 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 shadow-sm">👑 SaaS Setup</span>
     </div>
 
-    <div class="w-16 h-16 bg-[#1D283A] border border-slate-700/60 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">
-      📦
-    </div>
+    <div class="w-16 h-16 bg-[#1D283A] border border-slate-700/60 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">📦</div>
 
-    <h1 class="text-xl font-bold text-white mb-1">
-      ติดตั้งระบบ <span class="text-emerald-400">VEGA POS</span>
-    </h1>
-    <p class="text-slate-400 text-xs mb-6 font-light">
-      คลิกปุ่มด้านล่างเพื่อสร้างคลังข้อมูลส่วนตัว และเริ่มใช้งานระบบขายได้ทันที
-    </p>
+    <h1 class="text-xl font-bold text-white mb-1">ติดตั้งระบบ <span class="text-emerald-400">VEGA POS</span></h1>
+    <p class="text-slate-400 text-xs mb-6 font-light">คลิกปุ่มด้านล่างเพื่อสร้างคลังข้อมูลส่วนตัว และเริ่มใช้งานระบบขายได้ทันที</p>
 
     <div class="bg-[#1D283A] border border-slate-700/60 rounded-2xl p-4 mb-6 text-left space-y-2.5 text-xs">
       <div class="flex justify-between items-center">
@@ -82,25 +94,20 @@
       </div>
       <div class="flex justify-between items-center pt-2.5 border-t border-slate-700/50">
         <span class="text-slate-400">⏳ ระยะเวลาใช้งาน:</span>
-        <span class="text-purple-300 font-medium bg-purple-950/80 px-2 py-0.5 rounded border border-purple-500/30">
-          ทดลองใช้ฟรี 30 วัน
-        </span>
+        <span class="text-purple-300 font-medium bg-purple-950/80 px-2 py-0.5 rounded border border-purple-500/30">ทดลองใช้ฟรี 30 วัน</span>
       </div>
     </div>
 
     <button id="installBtn" onclick="startInstall()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold rounded-2xl text-base transition duration-200 shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2">
-      <span>🚀</span>
-      <span>กดติดตั้งระบบ (1-Click Install)</span>
+      <span>🚀</span><span>กดติดตั้งระบบ (1-Click Install)</span>
     </button>
 
     <p class="text-[11px] text-slate-500 mt-6 font-light">VEGA POS © 2026 All rights reserved</p>
   </div>
 
-  <!-- Card 2: หน้าต่าง Loading และ นับถอยหลัง -->
+  <!-- Card 2: หน้าต่าง Loading และนับถอยหลัง -->
   <div id="loadingCard" class="hidden max-w-md w-full bg-[#111827] border border-slate-800/80 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
-    <div id="spinnerContainer" class="flex justify-center mb-6">
-      <div class="custom-spinner"></div>
-    </div>
+    <div id="spinnerContainer" class="flex justify-center mb-6"><div class="custom-spinner"></div></div>
     <div id="successIcon" class="hidden w-16 h-16 bg-emerald-950/80 border border-emerald-500/50 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-lg">✅</div>
     <h2 id="cardTitle" class="text-xl font-bold text-white mb-2">กำลังติดตั้งระบบ <span class="text-emerald-400">VEGA POS</span></h2>
     <p id="loadingStatus" class="text-slate-300 text-xs mb-6 font-light">กำลังสร้างคลังข้อมูลส่วนตัวของคุณ กรุณารอสักครู่ (ประมาณ 5-10 วินาที)</p>
@@ -117,10 +124,7 @@
     <div id="progressBar" class="w-full bg-[#1D283A] rounded-full h-2 overflow-hidden border border-slate-700/50">
       <div class="bg-emerald-500 h-2 rounded-full animate-pulse w-full"></div>
     </div>
-
-    <p id="warningMsg" class="text-[11px] text-slate-500 mt-6 font-light">
-      ⚠️ กรุณาอย่าเพิ่งปิดหรือรีเฟรชหน้าต่างนี้จนกว่าจะเสร็จสิ้น
-    </p>
+    <p id="warningMsg" class="text-[11px] text-slate-500 mt-6 font-light">⚠️ กรุณาอย่าเพิ่งปิดหรือรีเฟรชหน้าต่างนี้จนกว่าจะเสร็จสิ้น</p>
   </div>
   <? } ?>
 
@@ -168,6 +172,52 @@
           reloadPage();
         })
         .installSystem();
+    }
+
+    // ===== ระบบต่ออายุ (เรียก Billing.gs) =====
+    let pollTimer = null;
+
+    function startRenewal() {
+      const btn = document.getElementById('renewBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span><span>กำลังสร้าง QR...</span>';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (!res || !res.success) {
+            alert('เกิดข้อผิดพลาด: ' + (res ? res.message : 'ไม่ทราบสาเหตุ'));
+            btn.disabled = false;
+            btn.innerHTML = '<span>💳</span><span>ต่ออายุสมาชิก 30 วัน</span>';
+            return;
+          }
+          document.getElementById('renewSection').classList.add('hidden');
+          document.getElementById('qrBox').classList.remove('hidden');
+          document.getElementById('qrImage').src = res.qrImageUrl;
+          document.getElementById('qrAmount').innerText = '฿' + res.amount;
+          pollChargeStatus(res.chargeId);
+        })
+        .withFailureHandler(function(err) {
+          alert('เกิดข้อผิดพลาดจากระบบ: ' + (err.message || err));
+          btn.disabled = false;
+          btn.innerHTML = '<span>💳</span><span>ต่ออายุสมาชิก 30 วัน</span>';
+        })
+        .createRenewalCharge();
+    }
+
+    function pollChargeStatus(chargeId) {
+      pollTimer = setInterval(function() {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.success && res.paid) {
+              clearInterval(pollTimer);
+              document.getElementById('qrStatus').innerText = '✅ ชำระเงินสำเร็จ!';
+              document.getElementById('qrWaiting').innerText = 'กำลังพาเข้าสู่ระบบ...';
+              setTimeout(function() { reloadPage(); }, 1500);
+            }
+          })
+          .withFailureHandler(function(err) { console.error(err); })
+          .getChargeStatus(chargeId);
+      }, 4000);
     }
   </script>
 </body>

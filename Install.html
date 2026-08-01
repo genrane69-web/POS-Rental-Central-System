@@ -182,32 +182,39 @@
     // ===== ระบบต่ออายุ (เรียก Billing.gs) =====
     let pollTimer = null;
 
-    function startRenewal() {
-      const btn = document.getElementById('renewBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span>⏳</span><span>กำลังสร้าง QR...</span>';
+    function startRenewal(planId) {
+  const dailyBtn = document.getElementById('renewBtnDaily');
+  const monthlyBtn = document.getElementById('renewBtnMonthly');
+  const clickedBtn = planId === 'daily' ? dailyBtn : monthlyBtn;
+  const originalHTML = clickedBtn.innerHTML;
 
-      google.script.run
-        .withSuccessHandler(function(res) {
-          if (!res || !res.success) {
-            alert('เกิดข้อผิดพลาด: ' + (res ? res.message : 'ไม่ทราบสาเหตุ'));
-            btn.disabled = false;
-            btn.innerHTML = '<span>💳</span><span>ต่ออายุสมาชิก 30 วัน</span>';
-            return;
-          }
-          document.getElementById('renewSection').classList.add('hidden');
-          document.getElementById('qrBox').classList.remove('hidden');
-          document.getElementById('qrImage').src = res.qrImageUrl;
-          document.getElementById('qrAmount').innerText = '฿' + res.amount;
-          pollChargeStatus(res.chargeId);
-        })
-        .withFailureHandler(function(err) {
-          alert('เกิดข้อผิดพลาดจากระบบ: ' + (err.message || err));
-          btn.disabled = false;
-          btn.innerHTML = '<span>💳</span><span>ต่ออายุสมาชิก 30 วัน</span>';
-        })
-        .createRenewalCharge();
-    }
+  dailyBtn.disabled = true;
+  monthlyBtn.disabled = true;
+  clickedBtn.innerHTML = '<span>⏳ กำลังสร้าง QR...</span>';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.success) {
+        alert('เกิดข้อผิดพลาด: ' + (res ? res.message : 'ไม่ทราบสาเหตุ'));
+        dailyBtn.disabled = false;
+        monthlyBtn.disabled = false;
+        clickedBtn.innerHTML = originalHTML;
+        return;
+      }
+      document.getElementById('renewSection').classList.add('hidden');
+      document.getElementById('qrBox').classList.remove('hidden');
+      document.getElementById('qrImage').src = res.qrImageUrl;
+      document.getElementById('qrAmount').innerText = '฿' + res.amount + ' (' + res.days + ' วัน)';
+      pollChargeStatus(res.chargeId);
+    })
+    .withFailureHandler(function(err) {
+      alert('เกิดข้อผิดพลาดจากระบบ: ' + (err.message || err));
+      dailyBtn.disabled = false;
+      monthlyBtn.disabled = false;
+      clickedBtn.innerHTML = originalHTML;
+    })
+    .createRenewalCharge(planId);
+}
 
     function pollChargeStatus(chargeId) {
       pollTimer = setInterval(function() {

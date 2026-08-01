@@ -17,21 +17,20 @@ const RENEWAL_PLANS = {
   monthly: { days: 30, amount: 199, label: 'รายเดือน (199 บาท/30 วัน)' }
 };
 
-// ==========================================================
-// 1. สร้างรายการชำระเงิน + QR พร้อมเพย์ (เรียกจากหน้าตออายุฝั่งลูกค้า)
-// ==========================================================
-function createRenewalCharge() {
+function createRenewalCharge(planId) {
   try {
     const email = Session.getActiveUser().getEmail();
-    if (!email) return { success: false, message: "ไม่พบอีเมลผู้ใช้งาน กรุณาลงชือเข้าใช้ Google ก่อน" };
+    if (!email) return { success: false, message: "ไม่พบอีเมลผู้ใช้งาน กรุณาลงชื่อเข้าใช้ Google ก่อน" };
+
+    const plan = RENEWAL_PLANS[planId];
+    if (!plan) return { success: false, message: "ไม่พบแพ็กเกจที่เลือก" };
 
     if (OMISE_SECRET_KEY.indexOf("XXXX") !== -1) {
       return { success: false, message: "ระบบชำระเงินยังไม่พร้อมใช้งาน (ยังไม่ได้ตั้งค่า API Key)" };
     }
 
-    const amountSatang = Math.round(RENEWAL_AMOUNT_BAHT * 100);
+    const amountSatang = Math.round(plan.amount * 100);
 
-    // 1) สร้าง Source แบบพร้อมเพย์ (ใช้ Public Key — ปลอดภัยฝั่ง client ได้)
     const sourceRes = omiseRequest_(
       "https://vault.omise.co/sources",
       OMISE_PUBLIC_KEY,
@@ -41,7 +40,6 @@ function createRenewalCharge() {
       return { success: false, message: "สร้าง QR พร้อมเพย์ไม่สำเร็จ: " + (sourceRes && sourceRes.message ? sourceRes.message : "unknown error") };
     }
 
-    // 2) สร้าง Charge ผูกกับ Source (ต้องใช้ Secret Key ฝั่ง server เท่านั้น)
     const chargeRes = omiseRequest_(
       "https://api.omise.co/charges",
       OMISE_SECRET_KEY,
@@ -50,7 +48,8 @@ function createRenewalCharge() {
         currency: "thb",
         source: sourceRes.id,
         "metadata[email]": email,
-        "metadata[days]": RENEWAL_DAYS,
+        "metadata[days]": plan.days,
+        "metadata[planId]": planId,
         "metadata[purpose]": "vega_pos_renewal"
       }
     );
@@ -58,8 +57,7 @@ function createRenewalCharge() {
       return { success: false, message: "สร้างรายการชำระเงินไม่สำเร็จ: " + (chargeRes && chargeRes.message ? chargeRes.message : "unknown error") };
     }
 
-    // 3) บันทึกลงชีต Payments เป็นสถานะ "Pending" รอ Webhook ยืนยันการจายจริง
-    logPayment_(chargeRes.id, email, RENEWAL_AMOUNT_BAHT, "Pending");
+    logPayment_(chargeRes.id, email, plan.amount, "Pending");
 
     const qrImageUrl = (chargeRes.source && chargeRes.source.scannable_code && chargeRes.source.scannable_code.image)
       ? chargeRes.source.scannable_code.image.download_uri
@@ -68,7 +66,8 @@ function createRenewalCharge() {
     return {
       success: true,
       chargeId: chargeRes.id,
-      amount: RENEWAL_AMOUNT_BAHT,
+      amount: plan.amount,
+      days: plan.days,
       qrImageUrl: qrImageUrl,
       status: chargeRes.status
     };
